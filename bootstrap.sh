@@ -10,7 +10,7 @@
 export PROJECT_NAME='connectomics-sandbox'
 
 # -- where to create the virtual environment
-echo 'path to the virtual environment default directory'
+echo 'path to virtualenv home directory'
 read VENV_HOME
 
 # -- create the virtual environment
@@ -22,7 +22,7 @@ cd $VENV_HOME/$PROJECT_NAME
 
 # -- now cloning the project Github repository
 git clone git@github.com:coxlab/connectomics-sandbox.git
-cd connectomics-sandbox
+cd $PROJECT_NAME
 
 # -- once in the root directory we will install the
 #    project package
