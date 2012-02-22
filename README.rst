@@ -3,10 +3,10 @@ requirements
 
 The codes will need at least working versions of:
 
- - the V1 like code of Nicolas (just the directory *v1like/*)
  - numpy
  - scipy
  - PIL
+ - the V1 like code of Nicolas (just the directory *v1like/*)
  - a `resample` function (self-contained in `resample.py` here)
  - a `view_as_windows` function (self-contained in `shape` here)
 
