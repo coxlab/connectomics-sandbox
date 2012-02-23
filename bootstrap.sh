@@ -15,6 +15,7 @@ read VENV_HOME
 
 # -- create the virtual environment
 export WORKON_HOME=$VENV_HOME
+source /usr/bin/virtualenvwrapper.sh
 mkvirtualenv $PROJECT_NAME
 
 # -- move into the project root directory
