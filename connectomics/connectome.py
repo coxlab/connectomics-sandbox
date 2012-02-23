@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Connectome Dataset
+Connectome Dataset object for Hans Pfister connectome
+data.
 """
 
 # Copyright (C) 2011
@@ -21,7 +22,7 @@ from PIL import Image
 from skdata.data_home import get_data_home
 
 
-class ConnectomeBase(object):
+class ConnectomeHPBase(object):
     """Connectome Object Dataset
 
     Attributes
@@ -219,6 +220,6 @@ class ConnectomeBase(object):
         return annotations
 
 
-class Connectome(ConnectomeBase):
+class ConnectomeHP(ConnectomeHPBase):
     TRAINING_IMAGES_DIRNAME = "trainingImages"
     ORIGINAL_IMAGES_DIRNAME = "originalAC3Images"
