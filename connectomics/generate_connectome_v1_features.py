@@ -5,7 +5,7 @@ import cPickle
 import os
 
 # -- connectome dataset object
-from connectome import Connectome
+from connectome import ConnectomeHP
 
 # -- V1-like related
 from v1like import config, v1like_extract
@@ -27,9 +27,9 @@ from parameters import V1_MODEL_CONFIG
 # ----------------------------------------------------------------------------
 def main():
 
-    # -- retrieving the meta data concerning the "connectome" dataset
-    connectome_dataset_object = Connectome(DATASET_PATH)
-    meta = connectome_dataset_object.meta()
+    # -- retrieving the meta data concerning the "ConnectomeHP" dataset
+    ConnectomeHP_dataset_object = ConnectomeHP(DATASET_PATH)
+    meta = ConnectomeHP_dataset_object.meta()
 
     # -- print some information on screen
     print len(meta), 'images to process'

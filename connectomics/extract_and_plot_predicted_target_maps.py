@@ -21,7 +21,7 @@ import logging as log
 log.basicConfig(level=log.INFO)
 
 # -- need the connectome dataset object
-from connectome import Connectome
+from connectome import ConnectomeHP
 from parameters import DATASET_PATH
 from parameters import IM_SIZE
 
@@ -142,7 +142,7 @@ def main():
     #    to grayscale. Both the target maps and the grayscale original
     #    images are rescaled to [-1, +1] such that the sub-images in the
     #    final images are all displayed in the same range of pixel values
-    connectome_obj = Connectome(DATASET_PATH)
+    connectome_obj = ConnectomeHP(DATASET_PATH)
     meta = connectome_obj.meta()
     annotated_meta = sorted([imgd for imgd in meta if 'annotation' in imgd])
     gt_tms = []
