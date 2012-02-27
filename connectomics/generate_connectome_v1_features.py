@@ -5,14 +5,14 @@ import cPickle
 import os
 
 # -- connectome dataset object
-from connectome import ConnectomeHP
+from coxlabdata.connectome import ConnectomeHP
 
 # -- V1-like related
 from v1like import config, v1like_extract
 from v1like.v1like_funcs import get_image
 
 # -- resampling utility
-from resample import resample
+from skimage.shape import resample
 
 # -- global parameters for feature extraction
 from parameters import DATASET_PATH
