@@ -5,7 +5,7 @@ import cPickle
 import os
 
 # -- connectome dataset object
-from coxlabdata.connectome import ConnectomeHP
+from coxlabdata.connectome import ConnectomicsHP as Connectome
 
 # -- V1-like related
 from v1like import config, v1like_extract
@@ -28,7 +28,7 @@ from parameters import V1_MODEL_CONFIG
 def main():
 
     # -- retrieving the meta data concerning the "ConnectomeHP" dataset
-    ConnectomeHP_dataset_object = ConnectomeHP(DATASET_PATH)
+    ConnectomeHP_dataset_object = Connectome(DATASET_PATH)
     meta = ConnectomeHP_dataset_object.meta()
 
     # -- print some information on screen

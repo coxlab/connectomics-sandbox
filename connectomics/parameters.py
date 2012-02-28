@@ -5,7 +5,8 @@ Gathers all the parameters used for model selection and more
 """
 
 # full path to where the connectome dataset is on disk
-DATASET_PATH = '/home/poilvert/Dropbox/0__Shared_with_Poilvert/ConnectomicsData/'
+DATASET_PATH = '/home/poilvert/Dropbox/0__Shared_with' + \
+               '_Poilvert/ConnectomicsData/'
 
 # where to save the *.npz files containing the features
 FEATURES_DIR = '/home/npoilvert/connectome/v1like_features'
@@ -13,7 +14,8 @@ FEATURES_DIR = '/home/npoilvert/connectome/v1like_features'
 # name of the file containing all the v1 like feature of
 # all images in the dataset for all scales (given by the
 # max edge length)
-V1_FEATURES_FILENAME = './tmp/connectome_V1_5_scale_features.dat'
+V1_FEATURES_FILENAME = '/share/users/npoilvert/connectome_' + \
+                       'V1_5_scale_features.dat'
 
 # imsize
 IM_SIZE = 1024

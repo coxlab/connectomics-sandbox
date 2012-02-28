@@ -19,7 +19,10 @@ source /usr/bin/virtualenvwrapper.sh
 mkvirtualenv $PROJECT_NAME
 
 # -- move into the project root directory
-cd $VENV_HOME/$PROJECT_NAME
+cd $WORKON_HOME/$PROJECT_NAME
+
+# -- install some needed packages
+pip install -I ipython nose cython
 
 # -- now cloning the project Github repository
 git clone git@github.com:coxlab/connectomics-sandbox.git
@@ -28,3 +31,7 @@ cd $PROJECT_NAME
 # -- once in the root directory we will install the
 #    project package
 python setup.py develop
+
+# -- git submodules
+git submodule init
+git submodule update

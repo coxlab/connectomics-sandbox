@@ -25,13 +25,13 @@ import logging as log
 log.basicConfig(level=log.INFO)
 
 # -- for resampling
-from resample import resample
+from skimage.shape import resample
 
 # -- for classifiers
 from asgd import NaiveBinaryASGD as Classifier
 
 # -- dataset-related and basic parameters
-from connectome import ConnectomeHP
+from coxlabdata.connectome import ConnectomicsHP as Connectome
 from parameters import FEATURES_DIR
 from parameters import DATASET_PATH
 from parameters import IM_SIZE
@@ -144,7 +144,7 @@ def program(scales,
     # -- getting the target maps (target maps are binary maps with
     #    values -1 and +1)
     log.info('loading binary target maps')
-    dataset_obj = ConnectomeHP(DATASET_PATH)
+    dataset_obj = Connectome(DATASET_PATH)
     meta = dataset_obj.meta()
     annotated_meta = sorted([imgd for imgd in meta if 'annotation' in imgd])
     tms = []
