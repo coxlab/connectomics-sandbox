@@ -22,7 +22,7 @@ mkvirtualenv $PROJECT_NAME
 cd $WORKON_HOME/$PROJECT_NAME
 
 # -- install some needed packages
-pip install -I ipython nose cython
+pip install -I cython
 
 # -- now cloning the project Github repository
 git clone git@github.com:coxlab/connectomics-sandbox.git
