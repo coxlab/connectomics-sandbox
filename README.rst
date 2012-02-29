@@ -30,6 +30,11 @@ Set up the environment
 
 4. wait for all the installation to take place.
 5. remove ``tmp/``
+5-bis. Instead of performing the following commands you could also directly
+       issue a
+
+        $ workon connectomics-sandbox
+
 6. move into ``$ROOTDIR/connectomics-sandbox/``
 7. source the virtual environment
 
