@@ -28,10 +28,18 @@ pip install -I cython
 git clone git@github.com:poilvert/connectomics-sandbox.git
 cd $PROJECT_NAME
 
-# -- once in the root directory we will install the
-#    project package
-python setup.py develop
-
-# -- git submodules
+# -- git submodules activation
 git submodule init
 git submodule update
+
+# -- installing the submodules in develop mode
+for dir in "connectomics"/"external"/*
+do
+    echo "installing $dir in develop mode"
+    cd $dir
+    python setup.py develop
+    cd ../../
+done
+
+# -- install project package in develop mode
+python setup.py develop
