@@ -25,7 +25,7 @@ cd $WORKON_HOME/$PROJECT_NAME
 pip install -I cython
 
 # -- now cloning the project Github repository
-git clone git@github.com:coxlab/connectomics-sandbox.git
+git clone git@github.com:poilvert/connectomics-sandbox.git
 cd $PROJECT_NAME
 
 # -- once in the root directory we will install the
