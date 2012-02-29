@@ -20,7 +20,7 @@ def get_memmap_array(data_file_path):
     assert len(valid_files) == 1
 
     # -- extract the dictionnary in the Pickle file
-    dico = cPickle(open(valid_files[0], 'r'))
+    dico = cPickle.load(open(valid_files[0], 'r'))
 
     # -- we finally create the memmap array
     arr = np.memmap(data_file_path, dtype=dico['dtype'],
