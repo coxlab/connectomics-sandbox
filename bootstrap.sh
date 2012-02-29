@@ -20,6 +20,7 @@ mkvirtualenv $PROJECT_NAME
 
 # -- move into the project root directory
 cd $WORKON_HOME/$PROJECT_NAME
+source bin/activate
 
 # -- install some needed packages
 pip install -I cython
@@ -38,7 +39,7 @@ do
     echo "installing $dir in develop mode"
     cd $dir
     python setup.py develop
-    cd ../../
+    cd ../../..
 done
 
 # -- install project package in develop mode
