@@ -16,7 +16,7 @@ from util import get_trn_tst_coords
 from util import split_for_memory
 from util import get_reduced_tm
 from util import zero_mean_unit_variance
-from skimage.util.shape import view_as_windows
+from skimage.shape import view_as_windows
 from sklearn.cross_validation import KFold
 from skimage.io import imread
 
