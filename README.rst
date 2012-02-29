@@ -23,7 +23,9 @@ Set up the environment
 3. execute ``bootstrap.sh``
 
         $ chmod +x bootstrap.sh
+
         $ ./bootstrap.sh
+
         $ [enter the path to the root directory for your virtualenv] ROOTDIR
 
 4. wait for all the installation to take place.
@@ -63,3 +65,6 @@ Note
 So far the generation code is ahead of ``compute_tm.py`` so you cannot use
 the latter unless you already have computed another set of pikle files which
 are not produced by ``generate_connectome_v1_features.py``.
+
+Also, the ``bootstrap.sh`` script is very not general, so it will need some
+hard coded path removals.
