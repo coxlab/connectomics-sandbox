@@ -147,8 +147,10 @@ def main():
     annotated_meta = sorted([imgd for imgd in meta if 'annotation' in imgd])
     gt_tms = []
     for imgd in annotated_meta:
-        gt_tms += [connectome_obj.get_annotation(annd) for annd in
-                   imgd['annotation']]
+        binary_tm= [connectome_obj.get_annotation(annd) for annd in
+                    imgd['annotation']]
+        gt_tms += [np.where(btm == False, -1., 1.).astype(np.float32)
+                    for btm in binary_tm]
 
     image_fnames = sorted([imgd['filename'] for imgd in annotated_meta])
     raw_original_images = [

@@ -149,7 +149,10 @@ def program(scales,
     annotated_meta = sorted([imgd for imgd in meta if 'annotation' in imgd])
     tms = []
     for imgd in annotated_meta:
-        tms += [dataset_obj.get_annotation(annd) for annd in imgd['annotation']]
+        binary_tm = [dataset_obj.get_annotation(annd)
+                for annd in imgd['annotation']]
+        tms += [np.where(btm == False, -1., 1.).astype(np.float32)
+                for btm in binary_tm]
 
     # -- getting the feature maps
     log.info('loading feature maps')

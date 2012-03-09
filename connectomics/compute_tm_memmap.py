@@ -137,7 +137,10 @@ def program(n_scales,
 
     tms, trn_img_idx_rng = [], []
     for imgd in annotated_meta:
-        tms += [dataset_obj.get_annotation(annd) for annd in imgd['annotation']]
+        binary_tm = [dataset_obj.get_annotation(annd)
+                     for annd in imgd['annotation']]
+        tms += [np.where(btm == False, -1., 1.).astype(np.float32)
+                     for btm in binary_tm]
         trn_img_idx_rng += [(imgd['z'] - 1 - (z_size / 2),
                              imgd['z'] - 1 + (z_size / 2) + 1)]
 
