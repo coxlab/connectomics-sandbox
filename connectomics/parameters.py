@@ -5,8 +5,7 @@ Gathers all the parameters used for model selection and more
 """
 
 # full path to where the connectome dataset is on disk
-DATASET_PATH = '/home/poilvert/Dropbox/0__Shared_with' + \
-               '_Poilvert/ConnectomicsData/'
+DATASET_PATH = '/share/datasets/connectomics2011'
 
 # where to save the *.npz files containing the features
 FEATURES_DIR = '/home/npoilvert/connectome/v1like_features'

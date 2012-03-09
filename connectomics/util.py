@@ -7,6 +7,188 @@ import cPickle
 from glob import glob
 from numpy.random import permutation
 
+from skimage.shape import view_as_windows
+
+
+def generate_Xy_train(farr,
+                      h_size, w_size,
+                      trn_idx, tst_idx,
+                      tm,
+                      memory_limit,
+                      randomize):
+
+    # -- transposing the feature array to get the
+    #    height and width first, followed respectively
+    #    by number of images, number of scales, and
+    #    number of features per scale per image
+    tfarr = np.transpose(farr, (2, 3, 0, 1, 4))
+
+    # -- then we create a rolling view over the transposed
+    #    feature array
+    rtfarr = view_as_windows(tfarr, (h_size, w_size, 1, 1, 1))
+
+    # -- number of "super-pixels" in the rolling view in h
+    #    and w directions (these correspond to the size of the
+    #    original image minus the aprons)
+    hp, wp = rtfarr.shape[:2]
+
+    # -- getting the (h, w) coordinates of the training examples
+    trn_h, trn_w, _, _ = get_trn_tst_coords(hp, wp,
+                                            trn_idx, tst_idx,
+                                            randomize=randomize)
+
+    # -- splitting the coordinate arrays in batches of
+    #    smaller coordinate arrays for memory management
+    feature_dimensionality = np.prod(np.array(rtfarr.shape[2:]))
+    trn_h_l, trn_w_l = split_for_memory(trn_h, trn_w,
+                                        feature_dimensionality,
+                                        rtfarr.itemsize,
+                                        memory_limit)
+
+    # -- building the generator of X_train, y_train
+    for h_arr, w_arr in zip(trn_h_l, trn_w_l):
+        yield (rtfarr[h_arr, w_arr, ...].reshape(h_arr.size, -1),
+               tm[h_arr, w_arr])
+
+
+def generate_Xhw_test(farr,
+                      h_size, w_size,
+                      trn_idx, tst_idx,
+                      memory_limit,
+                      randomize):
+
+    # -- transposing the feature array to get the
+    #    height and width first, followed respectively
+    #    by number of images, number of scales, and
+    #    number of features per scale per image
+    tfarr = np.transpose(farr, (2, 3, 0, 1, 4))
+
+    # -- then we create a rolling view over the transposed
+    #    feature array
+    rtfarr = view_as_windows(tfarr, (h_size, w_size, 1, 1, 1))
+
+    # -- number of "super-pixels" in the rolling view in h
+    #    and w directions (these correspond to the size of the
+    #    original image minus the aprons)
+    hp, wp = rtfarr.shape[:2]
+
+    # -- getting the (h, w) coordinates of the training examples
+    _, _, tst_h, tst_w = get_trn_tst_coords(hp, wp,
+                                            trn_idx, tst_idx,
+                                            randomize=randomize)
+
+    # -- splitting the coordinate arrays in batches of
+    #    smaller coordinate arrays for memory management
+    feature_dimensionality = np.prod(np.array(rtfarr.shape[2:]))
+    tst_h_l, tst_w_l = split_for_memory(tst_h, tst_w,
+                                        feature_dimensionality,
+                                        rtfarr.itemsize,
+                                        memory_limit)
+
+    # -- building the generator
+    for h_arr, w_arr in zip(tst_h_l, tst_w_l):
+        yield (rtfarr[h_arr, w_arr, ...].reshape(h_arr.size, -1),
+               h_arr, w_arr)
+
+
+class OnlineScaler(object):
+
+    def __init__(self, d):
+        """initializes an Online Scaler object
+
+        attributes
+        ----------
+
+        `r_ns`: int64
+            running number of sample feature vectors
+
+        `r_mn`: 1D array of float64
+            running mean feature vector
+
+        `r_va`: 1D array of float64
+            running vector of feature-wise variance
+
+        methods
+        -------
+
+        `partial_fit`:
+            updates the values of `r_ns`, `r_mn` and `r_va`
+            using the new data in the batch
+
+        `transform`:
+            returns a batch, where all the feature vectors have
+            been translated uniformly by the current mean feature
+            vector and normalized by the current standard deviation
+            (i.e. the square root of the current variance) feature
+            wise.
+
+        `fit_transform`:
+            first perform a partial fit of the Scaler and then
+            transforms the batch
+
+        conventions
+        -----------
+        'r' means 'running' like in 'running average'
+        'ns' stands for 'number of samples'
+        'mn' stands for 'mean'
+        'va' stands for 'variance'
+        'd' is the dimensionality of the feature vector
+        """
+
+        self.r_ns = np.int64(0)
+        self.r_mn = np.zeros(d, dtype=np.float64)
+        self.r_va = np.zeros(d, dtype=np.float64)
+        self.d = np.int64(d)
+
+    def partial_fit(self, X):
+
+        # -- X has to be 2D
+        if X.ndim != 2:
+            raise ValueError('training batch must be 2D')
+
+        # -- makes sure that the batch X has a second
+        #    dimension equal to d
+        if X.shape[1] != self.d:
+            raise ValueError('wrong number of features')
+
+        # -- makes sure that the batch has at least one
+        #    sample
+        if X.shape[0] < 1:
+            raise ValueError('batch is too small')
+
+        # -- extract number of samples in batch and
+        #    computes the sum of X and X**2 of the batch
+        b_ns = np.int64(X.shape[0])
+        b_su = np.float64(X.sum(axis=0))
+        b_sq = np.float64((X**2).sum(axis=0))
+
+        # -- updating the values for the number of samples
+        #    the mean vector X and the variance. 'c' stands
+        #    for 'current'
+        c_ns = self.r_ns
+        c_mn = self.r_mn
+        c_va = self.r_va
+
+        self.r_ns = c_ns + b_ns
+        self.r_mn = 1. / self.r_ns * (c_ns * c_mn + b_su)
+        self.r_va = 1. / self.r_ns * (c_ns * (c_va + c_mn**2) + b_sq) \
+                    - self.r_mn**2
+
+    def transform(self, X):
+
+        # -- returns (X - mean) / sqrt(var)
+        meanX = (self.r_mn[np.newaxis, :]).astype(X.dtype)
+        std = np.sqrt((self.r_va[np.newaxis, :]).astype(X.dtype))
+        return (X - meanX) / std
+
+    def fit_transform(self, X):
+
+        # -- first update the attributes of the Scaler object
+        self.partial_fit(X)
+
+        # -- then transform X
+        return self.transform(X)
+
 
 def get_memmap_array(data_file_path):
 
