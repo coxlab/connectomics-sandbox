@@ -4,6 +4,7 @@
 import numpy as np
 from numpy.linalg import norm
 from scipy.stats import pearsonr
+from scipy.stats import spearmanr
 from scipy.integrate import trapz as trapezoidal
 from scipy.ndimage import gaussian_filter
 
@@ -203,6 +204,34 @@ def pearson(arr, ref):
     pearson = pearsonr(arr_in, ref_in)[0]
 
     return pearson
+
+
+def spearman(arr, ref):
+    """
+    computes the Spearman correlation coefficiant between the two
+    array (considering the raveled arrays as two datasets of random
+    variables with a given distribution).
+    The preprocessing step ensures that the array elements are all
+    within [-1, 1]
+
+    Parameters
+    ==========
+    arr: array-like
+        input array
+
+    ref: array-like
+        reference input array
+
+    Returns
+    =======
+    spearman: float
+        Spearman's correlation coefficiant
+    """
+
+    arr_in, ref_in = _preprocess(arr, ref)
+    spearman = spearmanr(arr_in, ref_in)[0]
+
+    return spearman
 
 
 def ap(arr, ref, eps=0.001):
