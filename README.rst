@@ -53,8 +53,8 @@ the directory contains mostly three codes:
 
     1. ``generate_connectome_v1_features.py`` to generate the binary file that
        that will be mem-mapped
-    2. ``compute_tm.py`` that train and test a classifier given some command
-       line options
+    2. ``compute_tm_memmap.py`` trains and tests a classifier using the latest
+       memmap technique for extracting the features
     3. ``extract_and_plot_predicted_target_maps.py`` used to extract the target
        maps and store the results as png images in a directory
 
@@ -64,12 +64,8 @@ An important file to carefully update is ``parameters.py`` where some path
 and options are defined. This files is used by the above codes so make sure
 you have proper paths and option values.
 
-Note
-====
+Notes
+=====
 
-So far the generation code is ahead of ``compute_tm.py`` so you cannot use
-the latter unless you already have computed another set of pikle files which
-are not produced by ``generate_connectome_v1_features.py``.
-
-Also, the ``bootstrap.sh`` script is very not general, so it will need some
-hard coded path removals.
+The ``bootstrap.sh`` script is very not general, so it will need some upgrade
+in the future to discover some paths instead of hard coding them.
