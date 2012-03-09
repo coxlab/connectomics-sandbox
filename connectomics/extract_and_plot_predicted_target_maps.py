@@ -178,8 +178,10 @@ def main():
             gv_tm = gv_tms[idx]
             reduced_gt_tm = downscale_tm(gt_tm, gv_tm)
             pearson = metrics.pearson(gv_tm, reduced_gt_tm)
+            spearman = metrics.spearman(gv_tm, reduced_gt_tm)
             ap, _ = metrics.ap(gv_tm, reduced_gt_tm)
             metrics_per_image += [dict(pearson=pearson,
+                                       spearman=spearman,
                                        ap=ap)]
         tm_metrics.append(metrics_per_image)
 
