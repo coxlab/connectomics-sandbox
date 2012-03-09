@@ -5,6 +5,106 @@ import numpy as np
 from numpy.linalg import norm
 from scipy.stats import pearsonr
 from scipy.integrate import trapz as trapezoidal
+from scipy.ndimage import gaussian_filter
+
+# -- spread of Gaussian filter for blurring the
+#    Ground truth annotations
+SIGMA = 1.
+
+# -- epsilon is used to binarize the Gaussian
+#    filtered ground truth annotations
+EPSILON = 0.2
+
+
+def _preprocess(arr, ref, force_rescale=True):
+    """
+    This function checks for the following properties
+    in arrays ``arr`` and ``ref``:
+
+    - ``arr`` and ``ref`` elements must be float32
+      and if not these are transformed.
+    - ``arr`` and ``ref`` are array-like objects, and
+      if not, these are cast into numpy arrays.
+    - ``arr`` and ``ref`` have the same shape.
+    - ``arr`` and ``ref`` element values are bounded
+      within [-1., 1.], and if not the array elements
+      are rescaled to this interval.
+    - elements of ``ref`` are also constrained to be
+      given by either -1 or +1.
+
+    then the arrays are raveled into 1D arrays and
+    returned.
+
+    Parameters
+    ==========
+    arr: array-like
+        input array
+
+    ref: array-like
+        reference input array
+
+    force_rescale: bool
+        force the rescaling of the input array and of
+        the ground truth array to [-1, 1]
+
+    Returns
+    =======
+    arr_rescaled, ref_rescaled: 1D arrays of type 'float32'
+        these arrays are rescaled to [-1, 1]
+    """
+
+    # -- cast to numpy arrays of type 'float32'
+    arr_in = np.array(arr).astype(np.float32)
+    ref_in = np.array(ref).astype(np.float32)
+
+    # -- arrays must be of the same shape
+    assert arr_in.shape == ref_in.shape
+
+    # -- extract minimal and maximal values for both arrays
+    arr_in_min, arr_in_max = arr_in.min(), arr_in.max()
+    ref_in_min, ref_in_max = ref_in.min(), ref_in.max()
+
+    # -- if element values are not within the interval
+    #    [-1, 1], then the arrays are rescaled
+    if arr_in_min == arr_in_max:
+        arr_rescaled = np.zeros(arr_in.shape, dtype=np.float32)
+    elif (arr_in_min < -1.) or (1. < arr_in_max):
+        arr_rescaled = 1. - \
+                      (2. / (arr_in_max - arr_in_min)) * \
+                      (arr_in_max - arr_in)
+    elif force_rescale:
+        arr_rescaled = 1. - \
+                      (2. / (arr_in_max - arr_in_min)) * \
+                      (arr_in_max - arr_in)
+    else:
+        arr_rescaled = arr_in
+
+    if ref_in_min == ref_in_max:
+        ref_rescaled = np.zeros(ref_in.shape, dtype=np.float32)
+    elif (ref_in_min < -1.) or (1. < ref_in_max):
+        ref_rescaled = 1. - \
+                      (2. / (ref_in_max - ref_in_min)) * \
+                      (ref_in_max - ref_in)
+    elif force_rescale:
+        ref_rescaled = 1. - \
+                      (2. / (ref_in_max - ref_in_min)) * \
+                      (ref_in_max - ref_in)
+    else:
+        ref_rescaled = ref_in
+
+    assert arr_rescaled.size == ref_rescaled.size
+
+    # -- the reference array is supposed to be a binary map
+    ref_rescaled = np.where(ref_rescaled < 0., -1., 1.)
+
+    # -- applying a small Gaussian filter to "spread out" the
+    #    ground truth annotation
+    gref_rescaled = gaussian_filter(ref_rescaled, SIGMA)
+
+    # -- binarizing the filtered ground truth
+    tgref_rescaled = np.where(gref_rescaled > -1. + EPSILON, 1., -1.)
+
+    return (arr_rescaled.ravel(), tgref_rescaled.ravel())
 
 
 def rmse(arr, ref):
@@ -167,75 +267,3 @@ def ap(arr, ref, eps=0.001):
     max_accuracy = accuracy.max()
 
     return ap, max_accuracy
-
-
-def _preprocess(arr, ref):
-    """
-    This function checks for the following properties
-    in arrays ``arr`` and ``ref``:
-
-    - ``arr`` and ``ref`` elements must be float32
-      and if not these are transformed.
-    - ``arr`` and ``ref`` are array-like objects, and
-      if not, these are cast into numpy arrays.
-    - ``arr`` and ``ref`` have the same shape.
-    - ``arr`` and ``ref`` element values are bounded
-      within [-1., 1.], and if not the array elements
-      are rescaled to this interval.
-    - elements of ``ref`` are also constrained to be
-      given by either -1 or +1.
-
-    then the arrays are raveled into 1D arrays and
-    returned.
-
-    Parameters
-    ==========
-    arr: array-like
-        input array
-
-    ref: array-like
-        reference input array
-
-    Returns
-    =======
-    arr_rescaled, ref_rescaled: 1D arrays of type 'float32'
-        these arrays are rescaled to [-1, 1]
-    """
-
-    # -- cast to numpy arrays of type 'float32'
-    arr_in = np.array(arr).astype(np.float32)
-    ref_in = np.array(ref).astype(np.float32)
-
-    # -- arrays must be of the same shape
-    assert arr_in.shape == ref_in.shape
-
-    # -- extract minimal and maximal values for both arrays
-    arr_in_min, arr_in_max = arr_in.min(), arr_in.max()
-    ref_in_min, ref_in_max = ref_in.min(), ref_in.max()
-
-    # -- if element values are not within the interval
-    #    [-1, 1], then the arrays are rescaled
-    if arr_in_min == arr_in_max:
-        arr_rescaled = np.zeros(arr_in.shape, dtype=np.float32)
-    elif (arr_in_min < -1.) or (1. < arr_in_max):
-        arr_rescaled = 1. - \
-                      (2. / (arr_in_max - arr_in_min)) * \
-                      (arr_in_max - arr_in)
-    else:
-        arr_rescaled = arr_in
-
-    if ref_in_min == ref_in_max:
-        ref_rescaled = np.zeros(ref_in.shape, dtype=np.float32)
-    elif (ref_in_min < -1.) or (1. < ref_in_max):
-        ref_rescaled = 1. - \
-                      (2. / (ref_in_max - ref_in_min)) * \
-                      (ref_in_max - ref_in)
-    else:
-        ref_rescaled = ref_in
-
-    assert arr_rescaled.size == ref_rescaled.size
-
-    # -- the reference array is supposed to be a binary map
-    ref_rescaled = np.where(ref_rescaled < 0., -1., 1.)
-
-    return (arr_rescaled.ravel(), ref_rescaled.ravel())
