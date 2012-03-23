@@ -13,3 +13,6 @@
 [submodule "connectomics/external/connectome"]
 	path = connectomics/external/connectome
 	url = git@github.com:poilvert/coxlabdata.git
+[submodule "connectomics/external/genson"]
+	path = connectomics/external/genson
+	url = git://github.com/davidcox/genson.git
