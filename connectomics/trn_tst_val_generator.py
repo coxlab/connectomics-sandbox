@@ -131,22 +131,24 @@ def generate(divide_factor=2,
             #    images for the specified cross validation fold
             trn_l = []
             tst_l = []
-            gt_l = []
+            trn_gt_l = []
+            tst_gt_l = []
 
             # -- list of training/testing images
             for img, gt in zip(trn_tst_imgs, trn_tst_gt_imgs):
                 blk_view = view_as_blocks(img[:h_tot, :w_tot], (h_new, w_new))
                 blk_view_gt = view_as_blocks(gt[:h_tot, :w_tot], (h_new, w_new))
                 tst_l += [blk_view[i, j, :, :]]
-                gt_l += [blk_view_gt[i, j, :, :]]
+                tst_gt_l += [blk_view_gt[i, j, :, :]]
                 for l in xrange(int(divide_factor)):
                     for p in xrange(int(divide_factor)):
                         if (l != i) or (p != j):
                             trn_l += [blk_view[l, p, :, :]]
+                            trn_gt_l = [blk_view_gt[l, p, :, :]]
 
             # -- append new lists of train/test images to
             #    ``trn_tst_ll``
-            trn_tst_ll.append([trn_l, tst_l, gt_l])
+            trn_tst_ll.append([trn_l, trn_gt_l, tst_l, tst_gt_l])
 
     # -- build the validation set
     val_l = []
