@@ -16,3 +16,6 @@
 [submodule "connectomics/external/genson"]
 	path = connectomics/external/genson
 	url = git://github.com/davidcox/genson.git
+[submodule "connectomics/external/sthor"]
+	path = connectomics/external/sthor
+	url = git@github.com:poilvert/sthor.git
