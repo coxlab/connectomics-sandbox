@@ -4,6 +4,11 @@
 Gathers all the parameters used for model selection and more
 """
 
+# path to the PLOS09 model class genson file
+PLOS09 = '/home/npoilvert/venv/connectomics-sandbox/' + \
+         'connectomics-sandbox/connectomics/' + \
+         'stride_one_plos09.gson'
+
 # full path to where the connectome dataset is on disk
 DATASET_PATH = '/share/datasets/connectomics2011/'
 

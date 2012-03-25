@@ -234,13 +234,23 @@ def spearman(arr, ref):
     return spearman
 
 
-def ap(arr, ref, eps=0.001):
+def ap(arr, ref, eps=0.001, preprocess=True):
     """
     Computes many metrics related to precision, recall, accuracy
     and mean average precision
     """
 
-    arr_in, ref_in = _preprocess(arr, ref)
+    if preprocess == True:
+        arr_in, ref_in = _preprocess(arr, ref)
+    else:
+        if arr.ndim > 1:
+            arr_in = arr.ravel()
+        else:
+            arr_in = arr
+        if ref.ndim > 1:
+            ref_in = ref.ravel()
+        else:
+            ref_in = ref
 
     size = arr_in.size
 
