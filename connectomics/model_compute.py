@@ -10,6 +10,10 @@ This program will:
     3. computes the metrics
 """
 
+# -- for logging
+import logging as log
+log.basicConfig(level=log.INFO)
+
 import numpy as np
 from numpy.random import permutation
 from trn_tst_val_generator import generate
@@ -31,7 +35,7 @@ DEFAULT_TRN_VAL_IMG_Z_IDX = [71]
 DEFAULT_TST_IMG_Z_IDX = [3]
 DEFAULT_GENSON_SEED = 1
 RANDOMIZE = True
-NEPOCH = 3
+NEPOCH = 1
 NBH = 1
 NBW = 1
 
@@ -39,6 +43,7 @@ NBW = 1
 # -- generate training, validation and testing sets
 # -------------------------------------------------
 
+log.info('generating cross validation sets')
 sets_dictionnary = generate(divide_factor=2,
                             trn_val_img_z_idx=DEFAULT_TRN_VAL_IMG_Z_IDX,
                             tst_img_z_idx=DEFAULT_TST_IMG_Z_IDX)
@@ -50,6 +55,7 @@ tst_l = sets_dictionnary['tst']
 # -- generation of the SLM model
 # ------------------------------
 
+log.info('generating SLM model')
 # -- loading PLOS09-type SLM parameter ranges
 with open(PLOS09) as fin:
     gen = genson.loads(fin.read())
@@ -59,21 +65,20 @@ desc = gen.next()
 genson.default_random_seed = DEFAULT_GENSON_SEED
 
 in_shape = trn_val_ll[0][0][0].shape
-if len(in_shape) == 2:
-    in_shape += (1,)
 
 # -- create SLM model
 slm = SequentialLayeredModel(in_shape, desc)
 
-slm_depth = slm.filterbanks[(slm.n_layers, 0)].shape[-1]
+slm_depth = slm.description[-1][0][1]['initialize']['n_filters']
 
 # ------------------------------
 # -- Classifier training/testing
 # ------------------------------
 
 predictions = []
-for trn_val_l in trn_val_ll:
+for idx, trn_val_l in enumerate(trn_val_ll):
 
+    log.info('fold %i of %i' % (idx + 1, len(trn_val_ll)))
     feature_vector_dimension = slm_depth * NBH * NBW
 
     # -- initialize Classifier
@@ -85,8 +90,10 @@ for trn_val_l in trn_val_ll:
     trn_imgs, trn_gt_imgs, val_imgs, val_gt_imgs = trn_val_l
 
     # -- train the classifier
+    log.info(' training')
     for epoch in xrange(NEPOCH):
 
+        log.info('  epoch %i or %i' % (epoch + 1, NEPOCH))
         trn_list = zip(trn_imgs, trn_gt_imgs)
 
         if RANDOMIZE:
@@ -118,6 +125,7 @@ for trn_val_l in trn_val_ll:
             clf.partial_fit(X_trn, labels_trn)
 
     # -- validation
+    log.info(' validation')
     val_pred, val_gt = [], []
     for img, gt_img in zip(val_imgs, val_gt_imgs):
 
@@ -144,6 +152,7 @@ for trn_val_l in trn_val_ll:
         val_gt += [labels_val]
 
     # -- test
+    log.info(' test')
     tst_imgs, tst_gt_imgs = tst_l
     tst_pred, tst_gt = [], []
     for img, gt_img in zip(tst_imgs, tst_gt_imgs):
@@ -177,6 +186,7 @@ for trn_val_l in trn_val_ll:
 # -- Compute metric(s)
 # --------------------
 
+log.info('computing metric(s)')
 for fold in predictions:
 
     val_pred, val_gt, tst_pred, tst_gt = fold
@@ -184,9 +194,11 @@ for fold in predictions:
     # -- computes metric(s) for validation set
     preds = np.concatenate(val_pred)
     gts = np.concatenate(val_gt)
-    val_ap = ap(preds, gts, eps=0.001, preprocess=False)
+    val_ap, _ = ap(preds, gts, eps=0.001, preprocess=False)
+    log.info(' validation AP : %4.2f' % val_ap)
 
     # -- computes metric(s) for testing set
     preds = np.concatenate(tst_pred)
     gts = np.concatenate(tst_gt)
-    tst_ap = ap(preds, gts, eps=0.001, preprocess=False)
+    tst_ap, _ = ap(preds, gts, eps=0.001, preprocess=False)
+    log.info(' test AP       : %4.2f' % tst_ap)
