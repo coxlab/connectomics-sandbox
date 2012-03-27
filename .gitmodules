@@ -1,21 +1,6 @@
-[submodule "connectomics/external/mcc"]
-	path = connectomics/external/mcc
-	url = https://github.com/npinto/mcc.git
-[submodule "connectomics/external/asgd"]
-	path = connectomics/external/asgd
-	url = https://github.com/npinto/asgd.git
-[submodule "connectomics/external/shape"]
-	path = connectomics/external/shape
-	url = git@github.com:npinto/scikits-image.git
-[submodule "connectomics/external/v1like"]
-	path = connectomics/external/v1like
-	url = https://github.com/npinto/v1like.git
-[submodule "connectomics/external/connectome"]
-	path = connectomics/external/connectome
-	url = git@github.com:poilvert/coxlabdata.git
-[submodule "connectomics/external/genson"]
-	path = connectomics/external/genson
-	url = git://github.com/davidcox/genson.git
+[submodule "connectomics/external/coxlabdata"]
+	path = connectomics/external/coxlabdata
+	url = git@github.com:coxlab/coxlabdata.git
 [submodule "connectomics/external/sthor"]
 	path = connectomics/external/sthor
-	url = git@github.com:poilvert/sthor.git
+	url = git@github.com:nsf-ri-ubicv/sthor.git
