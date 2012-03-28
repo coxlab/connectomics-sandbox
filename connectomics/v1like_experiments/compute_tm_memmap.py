@@ -252,7 +252,7 @@ def program(n_scales,
 
                 # -- prediction of the classifier
                 for X_test, h_arr, w_arr in Xhw_tst_l:
-                    X_test = scaler.fit_transform(X_test)
+                    X_test = scaler.transform(X_test)
                     y_test = clf.decision_function(X_test)
                     predicted_tms_per_epoch[epoch][n_img][h_arr, w_arr] = y_test
 
