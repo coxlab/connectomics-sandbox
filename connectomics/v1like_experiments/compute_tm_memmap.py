@@ -222,7 +222,7 @@ def program(n_scales,
                                              randomize)
 
                 for X_train, y_train in Xy_trn_l:
-                    X_train = scaler.fit_transform(X_train)
+                    X_train = (scaler.partial_fit(X_train)).transform(X_train)
                     clf.partial_fit(X_train, y_train)
 
                 # -- increment n_pfit

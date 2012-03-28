@@ -122,10 +122,6 @@ class OnlineScaler(object):
             (i.e. the square root of the current variance) feature
             wise.
 
-        `fit_transform`:
-            first perform a partial fit of the Scaler and then
-            transforms the batch
-
         conventions
         -----------
         'r' means 'running' like in 'running average'
@@ -174,21 +170,22 @@ class OnlineScaler(object):
         self.r_va = 1. / self.r_ns * (c_ns * (c_va + c_mn**2) + b_sq) \
                     - self.r_mn**2
 
+        return self
+
     def transform(self, X):
 
-        # -- returns (X - mean) / sqrt(var)
-        meanX = (self.r_mn[np.newaxis, :]).astype(X.dtype)
-        std = np.sqrt((self.r_va[np.newaxis, :]).astype(X.dtype))
-        return (X - meanX) / std
+        _mean = (self.r_mn[np.newaxis, :]).astype(X.dtype)
+        _std = np.sqrt((self.r_va[np.newaxis, :]).astype(X.dtype))
 
-    def fit_transform(self, X):
+        out = X - _mean
 
-        # -- first update the attributes of the Scaler object
-        self.partial_fit(X)
+        if (_std == 0).any():
+            import warnings
+            warnings.warn("Zero standard deviation detected!")
+            _std = 1
+        out /= _std
 
-        # -- then transform X
-        return self.transform(X)
-
+        return out
 
 def get_memmap_array(data_file_path):
 
