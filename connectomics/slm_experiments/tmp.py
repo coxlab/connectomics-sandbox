@@ -63,17 +63,118 @@ tst_l = sets_dictionnary['tst']
 # -- generation of the SLM model
 # ------------------------------
 
-while True:
+#while True:
+if True:
 
     log.info('generating SLM model')
     # -- loading PLOS09-type SLM parameter ranges
-    gson = path.join(my_path, 'plos09_l3_stride_one.gson')
-    with open(gson, 'r') as fin:
-        gen = genson.loads(fin.read())
+    #gson = path.join(my_path, 'plos09_l3_stride_one.gson')
+    #gson = 'test.gson'
+    #genson.default_random_seed = DEFAULT_GENSON_SEED
+    #with open(gson, 'r') as fin:
+        #gen = genson.loads(fin.read())
 
     # -- extract SLM parameter range description
-    desc = gen.next()
-    genson.default_random_seed = DEFAULT_GENSON_SEED
+    #desc = gen.next()
+    #from pprint import pprint
+    #pprint(desc)
+
+    #outs = genson.dumps(desc, True)
+    #open('test.gson', 'w+').write(outs)
+    # -- L3 1st
+    desc = [
+        [('lnorm',
+          {'kwargs': {'inker_shape': [9, 9],
+                      'outker_shape': [9, 9],
+                      'remove_mean': False,
+                      'stretch': 10,
+                      'threshold': 1}})],
+        [('fbcorr',
+          #{'initialize': ['426b269c1bfeec366992218fb6e0cb5252cd7f69',
+                          #(64, 3, 3)],
+          {'initialize': {'filter_shape': (3, 3),
+                          'generate': ('random:uniform', {'rseed': 42}),
+                          'n_filters': 64},
+           'kwargs': {'max_out': None, 'min_out': 0}}),
+         ('lpool', {'kwargs': {'ker_shape': [7, 7], 'order': 1, 'stride': 2}}),
+         ('lnorm',
+          {'kwargs': {'inker_shape': [5, 5],
+                      'outker_shape': [5, 5],
+                      'remove_mean': False,
+                      'stretch': 0.10000000000000001,
+                      'threshold': 1}})],
+        [('fbcorr',
+          #{'initialize': ['9f1a2ad385682d076a7feacd923e50c330df4e29',
+                          #(128, 5, 5, 64)],
+          {'initialize': {'filter_shape': (5, 5),
+                          'generate': ('random:uniform', {'rseed': 42}),
+                          'n_filters': 128},
+           'kwargs': {'max_out': None, 'min_out': 0}}),
+         ('lpool', {'kwargs': {'ker_shape': [5, 5], 'order': 1, 'stride': 2}}),
+         ('lnorm',
+          {'kwargs': {'inker_shape': [7, 7],
+                      'outker_shape': [7, 7],
+                      'remove_mean': False,
+                      'stretch': 1,
+                      'threshold': 1}})],
+        [('fbcorr',
+          #{'initialize': ['d79b5af0732b177b2a9170288ba8f73727b56354',
+                          #(256, 5, 5, 128)],
+          {'initialize': {'filter_shape': (5, 5),
+                          'generate': ('random:uniform', {'rseed': 42}),
+                          'n_filters': 256},
+           'kwargs': {'max_out': None, 'min_out': 0}}),
+         ('lpool', {'kwargs': {'ker_shape': [7, 7], 'order': 10, 'stride': 2}}),
+         ('lnorm',
+          {'kwargs': {'inker_shape': [3, 3],
+                      'outker_shape': [3, 3],
+                      'remove_mean': False,
+                      'stretch': 10,
+                      'threshold': 1}})]
+    ]
+
+# -- max(1)
+#INFO:__main__: validation AP : 0.14
+#INFO:__main__: test AP       : 0.12
+#INFO:__main__: validation AP : 0.10
+#INFO:__main__: test AP       : 0.12
+#INFO:__main__: validation AP : 0.14
+#INFO:__main__: test AP       : 0.12
+#INFO:__main__: validation AP : 0.12
+#INFO:__main__: test AP       : 0.12
+
+# -- mean(1)
+#INFO:__main__:computing metric(s)
+#INFO:__main__: validation AP : 0.19
+#INFO:__main__: test AP       : 0.13
+#INFO:__main__: validation AP : 0.11
+#INFO:__main__: test AP       : 0.13
+#INFO:__main__: validation AP : 0.18
+#INFO:__main__: test AP       : 0.13
+#INFO:__main__: validation AP : 0.12
+#INFO:__main__: test AP       : 0.13
+
+# -- scaler + mean(1)
+#INFO:__main__: validation AP : 0.18
+#INFO:__main__: test AP       : 0.12
+#INFO:__main__: validation AP : 0.11
+#INFO:__main__: test AP       : 0.12
+#INFO:__main__: validation AP : 0.17
+#INFO:__main__: test AP       : 0.12
+#INFO:__main__: validation AP : 0.12
+#INFO:__main__: test AP       : 0.12
+
+# -- scaler + asgd
+#INFO:__main__: validation AP : 0.24
+#INFO:__main__: test AP       : 0.30
+#INFO:__main__: validation AP : 0.31
+#INFO:__main__: test AP       : 0.30
+#INFO:__main__: validation AP : 0.25
+#INFO:__main__: test AP       : 0.31
+#INFO:__main__: validation AP : 0.29
+#INFO:__main__: test AP       : 0.30
+
+    #raise
 
     in_shape = trn_val_ll[0][0][0].shape
 
@@ -113,12 +214,14 @@ while True:
             for img, gt_img in trn_list:
 
                 # -- training vectors
+                #img -= img.min()
+                #img /= img.max()
                 f_arr = slm.process(img)
                 h_old, w_old = f_arr.shape[:2]
                 rf_arr = view_as_windows(f_arr, (NBH, NBW, 1))
                 h_new, w_new = rf_arr.shape[:2]
                 X_trn = rf_arr.reshape(h_new * w_new, -1)
-                X_trn = scaler.fit_transform(X_trn)
+                X_trn = scaler.partial_fit(X_trn).transform(X_trn)
 
                 # -- labels
                 gt_px_x, gt_px_y = slm.rcp_field_central_px_coords(slm.n_layers)
@@ -141,12 +244,14 @@ while True:
         for img, gt_img in zip(val_imgs, val_gt_imgs):
 
             # -- training vectors
+            #img -= img.min()
+            #img /= img.max()
             f_arr = slm.process(img)
             h_old, w_old = f_arr.shape[:2]
             rf_arr = view_as_windows(f_arr, (NBH, NBW, 1))
             h_new, w_new = rf_arr.shape[:2]
             X_val = rf_arr.reshape(h_new * w_new, -1)
-            X_val = scaler.fit_transform(X_val)
+            X_val = scaler.transform(X_val)
 
             # -- True labels
             gt_px_x, gt_px_y = slm.rcp_field_central_px_coords(slm.n_layers)
@@ -157,6 +262,7 @@ while True:
 
             # -- Predicted labels
             labels_val_pred = clf.decision_function(X_val)
+            #labels_val_pred = X_val.max(1)
 
             # -- saving predictions and ground truths
             val_pred += [labels_val_pred]
@@ -169,12 +275,15 @@ while True:
         for img, gt_img in zip(tst_imgs, tst_gt_imgs):
 
             # -- training vectors
+            #img -= img.min()
+            #img /= img.max()
             f_arr = slm.process(img)
             h_old, w_old = f_arr.shape[:2]
             rf_arr = view_as_windows(f_arr, (NBH, NBW, 1))
             h_new, w_new = rf_arr.shape[:2]
             X_tst = rf_arr.reshape(h_new * w_new, -1)
-            X_tst = scaler.fit_transform(X_tst)
+            #X_tst = scaler.fit_transform(X_tst)
+            X_tst = scaler.partial_fit(X_tst).transform(X_tst)
 
             # -- True labels
             gt_px_x, gt_px_y = slm.rcp_field_central_px_coords(slm.n_layers)
@@ -185,6 +294,7 @@ while True:
 
             # -- Predicted labels
             labels_tst_pred = clf.decision_function(X_tst)
+            #labels_tst_pred = X_tst.max(1)
 
             # -- saving predictions and ground truths
             tst_pred += [labels_tst_pred]

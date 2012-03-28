@@ -8,11 +8,10 @@ task.
 
 # -- imports
 import numpy as np
-from coxlabdata.connectome import ConnectomicsHP
-from parameters import DATASET_PATH
+from coxlabdata import ConnectomicsHP
 from scipy.misc import imread
 from scipy.ndimage import gaussian_filter
-from skimage.shape import view_as_blocks
+from skimage.util.shape import view_as_blocks
 
 # -- default dtype for all images and annotations
 DTYPE = np.float32
@@ -38,7 +37,7 @@ def generate(divide_factor=2,
     # -- Get dataset metadata
     # -----------------------
 
-    obj = ConnectomicsHP(DATASET_PATH)
+    obj = ConnectomicsHP()
     metadata = obj.meta()
     annotated_metadata = [imgd for imgd in metadata if 'annotation' in imgd]
 

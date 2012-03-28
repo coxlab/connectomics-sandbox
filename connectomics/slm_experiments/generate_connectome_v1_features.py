@@ -12,7 +12,7 @@ from v1like import config, v1like_extract
 from v1like.v1like_funcs import get_image
 
 # -- resampling utility
-from skimage.shape import resample
+from sthor.operation import resample
 
 # -- global parameters for feature extraction
 from parameters import DATASET_PATH
