@@ -35,10 +35,6 @@ class OnlineScaler(object):
             (i.e. the square root of the current variance) feature
             wise.
 
-        `fit_transform`:
-            first perform a partial fit of the Scaler and then
-            transforms the batch
-
         conventions
         -----------
         'r' means 'running' like in 'running average'
