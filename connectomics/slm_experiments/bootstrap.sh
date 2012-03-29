@@ -6,7 +6,7 @@ VENV_NAME=connectomics-sandbox-slm_experiments-system
 # -- shell dependencies
 command -v mkvirtualenv
 
-CWD=$(dirname $0)  # current working dir
+CWD=`pwd`  # current working dir
 
 (cd ../../ && git submodule init && git submodule update)
 
@@ -19,6 +19,7 @@ pip install "scikits-image>=0.5"
 
 pip install --no-deps -I git+https://github.com/npinto/asgd.git
 pip install --no-deps -I git+https://github.com/npinto/mcc.git
+pip install --no-deps -I git+https://github.com/npinto/bangmetric.git
 pip install --no-deps -I git+https://github.com/davidcox/genson.git
 
 # -- "active" dependencies

@@ -24,7 +24,7 @@ import genson
 from asgd import NaiveBinaryASGD as Classifier
 from scaler import OnlineScaler
 from util import get_reduced_tm
-from metrics import ap
+from bangmetric import average_precision
 from random import shuffle
 
 #from pymongo import Connection
@@ -207,14 +207,14 @@ while True:
         # -- computes metric(s) for validation set
         preds = np.concatenate(val_pred)
         gts = np.concatenate(val_gt)
-        val_ap, _ = ap(preds, gts, eps=0.001, preprocess=False)
+        val_ap = average_precision(gts, preds)
         val_aps += [val_ap]
         log.info(' validation AP : %4.2f' % val_ap)
 
         # -- computes metric(s) for testing set
         preds = np.concatenate(tst_pred)
         gts = np.concatenate(tst_gt)
-        tst_ap, _ = ap(preds, gts, eps=0.001, preprocess=False)
+        tst_ap = average_precision(gts, preds)
         tst_aps += [tst_ap]
         log.info(' test AP       : %4.2f' % tst_ap)
 

@@ -29,7 +29,7 @@ from parameters import IM_SIZE
 from PIL import Image, ImageDraw, ImageFont
 
 # -- for computing the metrics
-import metrics
+import bangmetric
 
 #--------------
 # Main function
@@ -175,14 +175,18 @@ def main():
     for idx, gt_tm in enumerate(gt_tms):
         metrics_per_image = []
         for gv_tms in final_pred_tms_per_pkl_file:
-            gv_tm = gv_tms[idx]
-            reduced_gt_tm = downscale_tm(gt_tm, gv_tm)
-            pearson = metrics.pearson(gv_tm, reduced_gt_tm)
-            spearman = metrics.spearman(gv_tm, reduced_gt_tm)
-            ap, _ = metrics.ap(gv_tm, reduced_gt_tm)
+
+            gv_tm = gv_tms[idx].ravel()
+            reduced_gt_tm = (downscale_tm(gt_tm, gv_tm)).ravel()
+
+            pearson = bangmetric.pearson(reduced_gt_tm, gv_tm)
+            spearman = bangmetric.spearman(reduced_gt_tm, gv_tm)
+            ap = bangmetric.average_precision(reduced_gt_tm, gv_tm)
+
             metrics_per_image += [dict(pearson=pearson,
                                        spearman=spearman,
                                        ap=ap)]
+
         tm_metrics.append(metrics_per_image)
 
     # -- time to dump the target maps to file
