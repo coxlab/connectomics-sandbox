@@ -3,7 +3,6 @@
 ~*
 *tar.gz
 *tgz
-*.sh
 *.swp
 parameters.py
 mongodb
