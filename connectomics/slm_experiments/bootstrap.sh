@@ -16,7 +16,7 @@ CWD=`pwd`
 
 (cd ../../ && git submodule init && git submodule update)
 
-mkvirtualenv --system-site-packages ${VENV_NAME}
+mkvirtualenv --system-site-packages --distribute ${VENV_NAME}
 
 # -- "frozen" dependencies
 pip install "scipy>=0.9.0"
