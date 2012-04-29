@@ -30,7 +30,7 @@ pip install --no-deps -I git+https://github.com/davidcox/genson.git
 
 # -- "active" dependencies
 (cd ${CWD}/../external/coxlabdata && python setup.py develop)
-(cd ${CWD}/../external/sthor && python setup.py develop)
+(cd ${CWD}/../external/sthor && git pull develop && python setup.py develop)
 
 echo
 echo "******************************************************"

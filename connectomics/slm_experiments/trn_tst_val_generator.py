@@ -13,10 +13,10 @@ log = logging.getLogger(__name__)
 # -- imports
 from os import path
 import numpy as np
-from coxlabdata.connectome import ConnectomicsHP
+from coxlabdata.connectomics_hp import ConnectomicsHP
 from scipy.misc import imread
 from scipy.ndimage import gaussian_filter
-from skimage.shape import view_as_blocks
+from skimage.util.shape import view_as_blocks
 
 # -- get dataset path from environment variable
 VERENA = './verenaImages'

@@ -35,11 +35,11 @@ from bangmetric.precision_recall import average_precision
 from bangmetric.correlation import pearson, spearman
 from random import shuffle
 
-from pymongo import Connection
+#from pymongo import Connection
 
-connection = Connection('localhost',28000)
-db = connection['connectome']
-coll = db['slm_models']
+#connection = Connection('localhost',28000)
+#db = connection['connectome']
+#coll = db['slm_models']
 
 # -----------
 # -- defaults
@@ -338,4 +338,4 @@ post = {"epoch": NEPOCH,
         "negative_to_positive_example_ratio": NEGPOSFRAC
         }
 
-coll.insert(post)
+#coll.insert(post)
