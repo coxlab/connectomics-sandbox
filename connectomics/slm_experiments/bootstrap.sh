@@ -6,7 +6,7 @@ source ~/.bashrc
 VENV_NAME=connectomics-sandbox-slm_experiments-system
 
 # -- export two environment variables
-export CONNECTOMICS_HP_BASE_PATH="/path/to/dataset"
+export CONNECTOMICS_HP_BASE_PATH="/home/poilvert/Dropbox/0__Shared_with_Poilvert/ConnectomicsData"
 
 # -- shell dependencies
 command -v mkvirtualenv
@@ -27,10 +27,10 @@ pip install --no-deps -I git+https://github.com/npinto/asgd.git
 pip install --no-deps -I git+https://github.com/npinto/mcc.git
 pip install --no-deps -I git+https://github.com/npinto/bangmetric.git
 pip install --no-deps -I git+https://github.com/davidcox/genson.git
-pip install --no-deps -I git+https://github.com/nsf-ri-ubicv/sthor.git
 
 # -- "active" dependencies
 (cd ${CWD}/../external/coxlabdata && python setup.py develop)
+(cd ${CWD}/../external/sthor && python setup.py develop)
 
 echo
 echo "******************************************************"
