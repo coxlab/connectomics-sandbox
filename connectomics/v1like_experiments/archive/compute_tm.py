@@ -16,7 +16,7 @@ from util import get_trn_tst_coords
 from util import split_for_memory
 from util import get_reduced_tm
 from util import zero_mean_unit_variance
-from skimage.util.shape import view_as_windows
+from skimage.shape import view_as_windows
 from sklearn.cross_validation import KFold
 from skimage.io import imread
 
@@ -25,13 +25,13 @@ import logging as log
 log.basicConfig(level=log.INFO)
 
 # -- for resampling
-from resample import resample
+from skimage.shape import resample
 
 # -- for classifiers
 from asgd import NaiveBinaryASGD as Classifier
 
 # -- dataset-related and basic parameters
-from connectome import Connectome
+from coxlabdata.connectome import ConnectomicsHP as Connectome
 from parameters import FEATURES_DIR
 from parameters import DATASET_PATH
 from parameters import IM_SIZE
@@ -149,7 +149,10 @@ def program(scales,
     annotated_meta = sorted([imgd for imgd in meta if 'annotation' in imgd])
     tms = []
     for imgd in annotated_meta:
-        tms += [dataset_obj.get_annotation(annd) for annd in imgd['annotation']]
+        binary_tm = [dataset_obj.get_annotation(annd)
+                for annd in imgd['annotation']]
+        tms += [np.where(btm == False, -1., 1.).astype(np.float32)
+                for btm in binary_tm]
 
     # -- getting the feature maps
     log.info('loading feature maps')

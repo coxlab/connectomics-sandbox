@@ -5,14 +5,14 @@ import cPickle
 import os
 
 # -- connectome dataset object
-from connectome import Connectome
+from coxlabdata.connectome import ConnectomicsHP as Connectome
 
 # -- V1-like related
 from v1like import config, v1like_extract
 from v1like.v1like_funcs import get_image
 
 # -- resampling utility
-from resample import resample
+from skimage.shape import resample
 
 # -- global parameters for feature extraction
 from parameters import DATASET_PATH
@@ -27,9 +27,9 @@ from parameters import V1_MODEL_CONFIG
 # ----------------------------------------------------------------------------
 def main():
 
-    # -- retrieving the meta data concerning the "connectome" dataset
-    connectome_dataset_object = Connectome(DATASET_PATH)
-    meta = connectome_dataset_object.meta()
+    # -- retrieving the meta data concerning the "ConnectomeHP" dataset
+    ConnectomeHP_dataset_object = Connectome(DATASET_PATH)
+    meta = ConnectomeHP_dataset_object.meta()
 
     # -- print some information on screen
     print len(meta), 'images to process'

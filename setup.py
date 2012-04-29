@@ -189,7 +189,7 @@ setuptools.setup(
     version = 'dev',
     packages = packages,
     scripts = scripts,
-    
+
     package_data = package_data,
     include_package_data = True,
 

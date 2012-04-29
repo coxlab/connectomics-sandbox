@@ -1,59 +1,71 @@
-requirements
+Requirements
 ============
 
-The codes will need at least working versions of:
+working versions of
 
- - the V1 like code of Nicolas (just the directory *v1like/*)
- - numpy
- - scipy
- - PIL
- - a `resample` function (self-contained in `resample.py` here)
- - a `view_as_windows` function (self-contained in `shape` here)
+1. ``virtualenv``
+2. ``virtualenvwrapper``
+3. ``git``
 
-how to use the codes
-====================
+Set up the environment
+======================
 
-generate the V1 features for the full connectome dataset
---------------------------------------------------------
+1. create a ``tmp/`` directory in which you clone the connectomics
+   Github repository
 
-Be careful here. The code will generate more than 280GB
-of data (if one uses defaults, like 5 scales). So one needs
-a large storage capacity, and don't store the result in a
-directory on the NFS.
+        $ cd tmp/
+        $ git clone git@github.com:poilvert/connectomics-sandbox.git
 
-The code `generate_connectome_v1_features.py` is on the
-**coxlabdata** Github account.
+2. move into ``connectomics-sandbox/``
 
-1. Edit file `parameters.py` and give values to the following
-   parameters (DATASET_PATH, V1_FEATURES_FILENAME, MAX_EDGE_L,
-   V1_MODEL_CONFIG).
-   DATASET_PATH gives the full path to the *connectome* dataset
-   on your machine.
-   V1_FEATURES_FILENAME will be the name of the (big) file
-   containing all the V1 features you asked for in the following
-   order in memory: image_index, scale_index, h, w, d.
-   MAX_EDGE_L should be a list of integers containing the values
-   of the scales at which to compute V1 features (e.g. 1024, 512).
-   V1_MODEL_CONFIG is a string that tell Nicolas' V1 like code
-   which *configuration* to use. Default is 96 Gabor filters.
+        $ cd connectomics-sandbox/
 
-2. run the generation code
-   `python generate_connectome_v1_features.py`
+3. execute ``bootstrap.sh``
 
-run a model
------------
+        $ chmod +x bootstrap.sh
 
-1. Edit file `parameters.py` to include the path to the
-   connectomics dataset on your computer (DATASET_PATH).
-   Also edit the parameter `V1_FEATURES_FILENAME` which
-   indicates where the file containing the V1 features
-   is. This will be used when building the memmap array.
-2. run the *master* program `compute_tm.py`. To see the
-   available options just type
-   `python compute_tm.py -h`
+        $ ./bootstrap.sh
 
-analyze the output(s) of a model run
-------------------------------------
+        $ [enter the path to the root directory for your virtualenv] ROOTDIR
 
-Use the script `extract_and_plot_predicted_target_maps.py`. To
-see the options just type `python extract_and_plot_predicted_target_maps.py -h`.
+4. wait for all the installation to take place.
+5. remove ``tmp/``
+6. Instead of performing the following commands (7, 8 and 9) you could also directly
+   issue a
+
+        $ workon connectomics-sandbox
+
+7. move into ``$ROOTDIR/connectomics-sandbox/``
+8. source the virtual environment
+
+        $ source bin/activate
+
+9. move into ``connectomics``
+
+        $ cd connectomics
+
+and start to play with the codes (see below).
+
+Using the codes
+===============
+
+the directory contains mostly three codes:
+
+    1. ``generate_connectome_v1_features.py`` to generate the binary file that
+       that will be mem-mapped
+    2. ``compute_tm_memmap.py`` trains and tests a classifier using the latest
+       memmap technique for extracting the features
+    3. ``extract_and_plot_predicted_target_maps.py`` used to extract the target
+       maps and store the results as png images in a directory
+
+the first code is executed directly while the last two have command line
+interfaces that are hopefully self-explanatory.
+An important file to carefully update is ``parameters.py`` where some path
+and options are defined. This files is used by the above codes so make sure
+you have proper paths and option values.
+
+Notes
+=====
+
+The ``bootstrap.sh`` script is very not general, so it will need some upgrade
+in the future to discover some paths instead of hard coding them.
