@@ -1,12 +1,19 @@
 #!/bin/bash
+
 source ~/.bashrc
 
+# -- name of the virtualenv directory
 VENV_NAME=connectomics-sandbox-slm_experiments-system
+
+# -- export two environment variables
+export CONNECTOMICS_HP_BASE_PATH="/path/to/dataset"
+export
 
 # -- shell dependencies
 command -v mkvirtualenv
 
-CWD=`pwd`  # current working dir
+# -- current working directory
+CWD=`pwd`
 
 (cd ../../ && git submodule init && git submodule update)
 

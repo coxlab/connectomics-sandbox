@@ -6,17 +6,24 @@ a set of train/test and validation images for the screening
 task.
 """
 
+import logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
 # -- imports
+from os import path
 import numpy as np
 from coxlabdata.connectome import ConnectomicsHP
-from parameters import DATASET_PATH
 from scipy.misc import imread
 from scipy.ndimage import gaussian_filter
 from skimage.shape import view_as_blocks
 
-# -- special (Verena's predicted maps)
-VERENA = './from_Verena'
-USE_VERENA = True
+# -- get dataset path from environment variable
+VERENA = './verenaImages'
+if not path.exists(VERENA):
+    USE_VERENA = False
+else:
+    USE_VERENA = True
 
 # -- default dtype for all images and annotations
 DTYPE = np.float32
@@ -43,9 +50,7 @@ def generate(divide_factor=2,
     # -- Get dataset metadata
     # -----------------------
 
-    from os import path
-    assert path.isdir(DATASET_PATH)
-    obj = ConnectomicsHP(DATASET_PATH)
+    obj = ConnectomicsHP()
     metadata = obj.meta()
     annotated_metadata = [imgd for imgd in metadata if 'annotation' in imgd]
 
