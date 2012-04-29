@@ -8,10 +8,15 @@ task.
 
 # -- imports
 import numpy as np
-from coxlabdata import ConnectomicsHP
+from coxlabdata.connectome import ConnectomicsHP
+from parameters import DATASET_PATH
 from scipy.misc import imread
 from scipy.ndimage import gaussian_filter
-from skimage.util.shape import view_as_blocks
+from skimage.shape import view_as_blocks
+
+# -- special (Verena's predicted maps)
+VERENA = './from_Verena'
+USE_VERENA = True
 
 # -- default dtype for all images and annotations
 DTYPE = np.float32
@@ -30,14 +35,17 @@ EPSILON = 0.2
 
 def generate(divide_factor=2,
              trn_val_img_z_idx=DEFAULT_TRN_VAL_IMG_Z_IDX,
-             tst_img_z_idx=DEFAULT_TST_IMG_Z_IDX
+             tst_img_z_idx=DEFAULT_TST_IMG_Z_IDX,
+             use_verena=USE_VERENA
              ):
 
     # -----------------------
     # -- Get dataset metadata
     # -----------------------
 
-    obj = ConnectomicsHP()
+    from os import path
+    assert path.isdir(DATASET_PATH)
+    obj = ConnectomicsHP(DATASET_PATH)
     metadata = obj.meta()
     annotated_metadata = [imgd for imgd in metadata if 'annotation' in imgd]
 
@@ -66,6 +74,13 @@ def generate(divide_factor=2,
                 for imgd in annotated_metadata if imgd['z'] in
                 tst_img_z_idx
                 ]
+
+    # VERENA's predictions
+    if use_verena:
+        verena_imgs = [imread(path.join(VERENA, 'I%05i_image_imProb.mat.png'
+                       % (i - 1)), flatten=True).astype(DTYPE)
+                       for i in tst_img_z_idx
+                       ]
 
     # ----------------------------------------------------
     # -- Operations on images and annotations (normalizing
@@ -161,6 +176,20 @@ def generate(divide_factor=2,
                 tst_gt_l += [blk_view_gt[i, j, :, :]]
     tst_ll = [tst_l, tst_gt_l]
 
-    sets = dict(trn_val=trn_val_ll, tst=tst_ll)
+    # -- special, if we want also Verena's predictions
+    if use_verena:
+        verena_l = []
+        for img in verena_imgs:
+            blk_view = view_as_blocks(img[:h_tot, :w_tot], (h_new, w_new))
+            for i in xrange(int(divide_factor)):
+                for j in xrange(int(divide_factor)):
+                    verena_l += [blk_view[i, j, :, :]]
+
+    # -- we build the final dictionnary
+    if use_verena:
+        sets = dict(trn_val=trn_val_ll, tst=tst_ll,
+                    verena_l=verena_l)
+    else:
+        sets = dict(trn_val=trn_val_ll, tst=tst_ll)
 
     return sets

@@ -1,6 +1,3 @@
 [submodule "connectomics/external/coxlabdata"]
 	path = connectomics/external/coxlabdata
 	url = git@github.com:coxlab/coxlabdata.git
-[submodule "connectomics/external/sthor"]
-	path = connectomics/external/sthor
-	url = git@github.com:nsf-ri-ubicv/sthor.git

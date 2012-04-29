@@ -49,6 +49,25 @@ def test_one_batch_fit():
     assert_allclose(out, ref_out, rtol=RTOL, atol=ATOL)
 
 
+def test_one_batch_fit_transform():
+
+    n_samples = 1000
+    n_features = 100
+    data = np.random.randn(n_samples, n_features).astype(DTYPE)
+
+    # -- reference outputs
+    ref_mean = data.mean(axis=0)
+    ref_std = data.std(axis=0)
+    ref_out = (data - ref_mean[np.newaxis]) / ref_std[np.newaxis, :]
+
+    # -- calculation with OnlineScaler
+    scaler = OnlineScaler(n_features)
+    out = scaler.fit_transform(data)
+
+    # -- tests
+    assert_allclose(out, ref_out, rtol=RTOL, atol=ATOL)
+
+
 def test_multiple_batch_fit_for_mean_and_std():
 
     n_samples = 1000

@@ -8,219 +8,334 @@ This program will:
        fold and computes the performance for both the
        validation images and testing images
     3. computes the metrics
+
+This code uses the latest SLM model that can compute
+feature vectors for all pixels.
+
+It also uses many classifiers to help separate membrane
+directions in different "channels"
 """
 
 # -- for logging
-import logging
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
+import logging as log
+log.basicConfig(level=log.INFO)
 
+import cPickle
+from random import choice
 import numpy as np
 from numpy.random import permutation
 from trn_tst_val_generator import generate
 from sthor.model.slm import SequentialLayeredModel
-from skimage.util.shape import view_as_windows
 import genson
+from parameters import PLOS09
 from asgd import NaiveBinaryASGD as Classifier
 from scaler import OnlineScaler
-from util import get_reduced_tm
-from bangmetric import average_precision
+from util import get_trn_coords_labels
+from util import predict
+from bangmetric.precision_recall import average_precision
+from bangmetric.correlation import pearson, spearman
 from random import shuffle
 
-#from pymongo import Connection
-#connection = Connection("localhost:28000")
-#db = connection['connectome']
-#posts = db.posts
+from pymongo import Connection
+
+connection = Connection('localhost',28000)
+db = connection['connectome']
+coll = db['slm_models']
 
 # -----------
 # -- defaults
 # -----------
 
+DEFAULT_FB_FNAME = '9_9_2.pkl'
 DEFAULT_TRN_VAL_IMG_Z_IDX = [71]
 DEFAULT_TST_IMG_Z_IDX = [3]
-DEFAULT_GENSON_SEED = 1
+DEFAULT_GENSON_SEED = 5
+USE_VERENA = True
 RANDOMIZE = True
 NEPOCH = 1
-NBH = 1
-NBW = 1
+NEGPOSFRAC = 2.
+USE_SUPERCLF = choice([True, False])
+
+# -------------------------------------------------------
+# Loading the filter bank obtained with KMeans clustering
+# -------------------------------------------------------
+
+log.info('loading KMeans filter bank')
+with open(DEFAULT_FB_FNAME, 'r') as fname:
+    fb = cPickle.load(fname)
+fbh, fbw, nclf = fb.shape
+log.info('%i filters of shape (%i, %i)' % (nclf, fbh, fbw))
 
 # -------------------------------------------------
 # -- generate training, validation and testing sets
 # -------------------------------------------------
 
-from os import path
-my_path = path.dirname(path.abspath(__file__))
-
 log.info('generating cross validation sets')
 sets_dictionnary = generate(divide_factor=2,
                             trn_val_img_z_idx=DEFAULT_TRN_VAL_IMG_Z_IDX,
-                            tst_img_z_idx=DEFAULT_TST_IMG_Z_IDX)
+                            tst_img_z_idx=DEFAULT_TST_IMG_Z_IDX,
+                            use_verena=USE_VERENA)
 
 trn_val_ll = sets_dictionnary['trn_val']
 tst_l = sets_dictionnary['tst']
+
+if USE_VERENA:
+    verena_imgs = sets_dictionnary['verena_l']
 
 # ------------------------------
 # -- generation of the SLM model
 # ------------------------------
 
-while True:
+log.info('generating SLM model')
 
-    log.info('generating SLM model')
-    # -- loading PLOS09-type SLM parameter ranges
-    gson = path.join(my_path, 'plos09_l3_stride_one.gson')
-    with open(gson, 'r') as fin:
-        gen = genson.loads(fin.read())
+# -- loading PLOS09-type SLM parameter ranges
+fin = open(PLOS09, 'r')
+gen = genson.loads(fin.read())
+fin.close()
 
-    # -- extract SLM parameter range description
-    desc = gen.next()
-    genson.default_random_seed = DEFAULT_GENSON_SEED
+# -- extract SLM parameter range description
+desc = gen.next()
+genson.default_random_seed = DEFAULT_GENSON_SEED
 
-    in_shape = trn_val_ll[0][0][0].shape
+in_shape = trn_val_ll[0][0][0].shape
 
-    # -- create SLM model
-    slm = SequentialLayeredModel(in_shape, desc)
+# -- create SLM model
+slm = SequentialLayeredModel(in_shape, desc)
 
-    slm_depth = slm.description[-1][0][1]['initialize']['n_filters']
+feature_vector_dimension = slm.description[-1][0][1]['initialize']['n_filters']
 
-    # ------------------------------
-    # -- Classifier training/testing
-    # ------------------------------
+# ------------------------------
+# -- Classifier training/testing
+# ------------------------------
 
-    predictions = []
-    for idx, trn_val_l in enumerate(trn_val_ll):
+predictions = []
+for idx, trn_val_l in enumerate(trn_val_ll):
 
-        log.info('fold %i of %i' % (idx + 1, len(trn_val_ll)))
-        feature_vector_dimension = slm_depth * NBH * NBW
+    log.info('fold %i of %i' % (idx + 1, len(trn_val_ll)))
 
-        # -- initialize Classifier
-        clf = Classifier(feature_vector_dimension)
-        scaler = OnlineScaler(feature_vector_dimension)
+    # -- initialize Classifier bank
+    clf_b = []
+    for _ in xrange(nclf):
+        clf_b += [Classifier(feature_vector_dimension)]
 
-        # -- extract lists of training images, training ground truths
-        #    validation images and validation ground truths in order
-        trn_imgs, trn_gt_imgs, val_imgs, val_gt_imgs = trn_val_l
+    # -- initialize Scaler
+    scaler = OnlineScaler(feature_vector_dimension)
 
-        # -- train the classifier
-        log.info(' training')
-        for epoch in xrange(NEPOCH):
+    # -- extract lists of training images, training ground truths
+    #    validation images and validation ground truths in order
+    trn_imgs, trn_gt_imgs, val_imgs, val_gt_imgs = trn_val_l
 
-            log.info('  epoch %i or %i' % (epoch + 1, NEPOCH))
-            trn_list = zip(trn_imgs, trn_gt_imgs)
+    # -- train the bank of classifiers
+    log.info(' training')
+    for epoch in xrange(NEPOCH):
+
+        log.info('  epoch %i of %i' % (epoch + 1, NEPOCH))
+        trn_list = zip(trn_imgs, trn_gt_imgs)
+
+        if RANDOMIZE:
+            shuffle(trn_list)
+
+        if USE_SUPERCLF:
+            X_trn_y_trn_l = []
+
+        for img, gt_img in trn_list:
+
+            # -- training vectors
+            f_arr = slm.process(img, pad_apron=True, interleave_stride=True)
+            X_trn = f_arr.reshape((f_arr.shape[0] * f_arr.shape[1],
+                                   f_arr.shape[2]))
+            X_trn = scaler.fit_transform(X_trn)
+
+            # -- training labels
+            y_trn = gt_img.ravel()
+
+            assert X_trn.shape[0] == y_trn.size
+            assert X_trn.shape[1] == feature_vector_dimension
 
             if RANDOMIZE:
-                shuffle(trn_list)
+                idx = permutation(np.arange(y_trn.size))
+                X_trn = X_trn[idx]
+                y_trn = y_trn[idx]
 
-            for img, gt_img in trn_list:
+            # -- save X_trn and y_trn for 'super-classifier' training
+            if USE_SUPERCLF:
+                X_trn_y_trn_l += [(X_trn.copy(), y_trn.copy())]
 
-                # -- training vectors
-                f_arr = slm.process(img)
-                h_old, w_old = f_arr.shape[:2]
-                rf_arr = view_as_windows(f_arr, (NBH, NBW, 1))
-                h_new, w_new = rf_arr.shape[:2]
-                X_trn = rf_arr.reshape(h_new * w_new, -1)
-                X_trn = scaler.fit_transform(X_trn)
+            # -- compute multi-classifier training examples
+            coords_labels_l = get_trn_coords_labels(gt_img, fb,
+                                                    fraction=NEGPOSFRAC)
 
-                # -- labels
-                gt_px_x, gt_px_y = slm.rcp_field_central_px_coords(slm.n_layers)
-                labels_trn = gt_img[gt_px_x, gt_px_y].reshape(h_old, w_old)
-                labels_trn = get_reduced_tm(labels_trn, NBH, NBW).ravel()
+            # -- loop over classifiers (here it is important to note that
+            #    f_arr has been properly scaled because X_trn was a *view*
+            #    on f_arr and it was itself scaled)
+            for i, (x_coords, y_coords, labels) in enumerate(coords_labels_l):
+                X = f_arr[x_coords, y_coords]
+                clf_b[i].partial_fit(X, labels)
 
-                assert X_trn.shape[0] == labels_trn.size
+    # -- train 'super classifier' if need be
+    if USE_SUPERCLF:
+        log.info('  super classifier training')
+        s_clf = Classifier(nclf)
+        s_scaler = OnlineScaler(nclf)
+        for X_trn, y_trn in X_trn_y_trn_l:
+            X_new = predict(X_trn, clf_b)
+            X_new = s_scaler.fit_transform(X_new)
+            s_clf.partial_fit(X_new, y_trn)
 
-                if RANDOMIZE:
-                    idx = np.arange(labels_trn.size)
-                    nidx = permutation(idx)
-                    X_trn = X_trn[nidx]
-                    labels_trn = labels_trn[nidx]
+    # -- validation
+    log.info(' validation')
+    val_pred, val_gt = [], []
 
-                clf.partial_fit(X_trn, labels_trn)
+    for img, gt_img in zip(val_imgs, val_gt_imgs):
 
-        # -- validation
-        log.info(' validation')
-        val_pred, val_gt = [], []
-        for img, gt_img in zip(val_imgs, val_gt_imgs):
+        # -- training vectors
+        f_arr = slm.process(img, pad_apron=True, interleave_stride=True)
+        X_val = f_arr.reshape((f_arr.shape[0] * f_arr.shape[1],
+                               f_arr.shape[2]))
+        X_val = scaler.transform(X_val)
 
-            # -- training vectors
-            f_arr = slm.process(img)
-            h_old, w_old = f_arr.shape[:2]
-            rf_arr = view_as_windows(f_arr, (NBH, NBW, 1))
-            h_new, w_new = rf_arr.shape[:2]
-            X_val = rf_arr.reshape(h_new * w_new, -1)
-            X_val = scaler.fit_transform(X_val)
+        # -- True labels
+        y_val = gt_img.ravel()
 
-            # -- True labels
-            gt_px_x, gt_px_y = slm.rcp_field_central_px_coords(slm.n_layers)
-            labels_val = gt_img[gt_px_x, gt_px_y].reshape(h_old, w_old)
-            labels_val = get_reduced_tm(labels_val, NBH, NBW).ravel()
+        assert X_val.shape[0] == y_val.size
+        assert X_val.shape[1] == feature_vector_dimension
 
-            assert X_val.shape[0] == labels_val.size
+        # -- Predicted labels
+        if USE_SUPERCLF:
+            X_new = predict(X_val, clf_b)
+            X_new = s_scaler.transform(X_new)
+            y_val_pred = s_clf.decision_function(X_new)
+        else:
+            X_new = predict(X_val, clf_b)
+            y_val_pred = X_new.max(axis=1)
 
-            # -- Predicted labels
-            labels_val_pred = clf.decision_function(X_val)
+        # -- saving predictions and ground truths
+        assert y_val.size == y_val_pred.size
+        val_pred += [y_val_pred]
+        val_gt += [y_val]
 
-            # -- saving predictions and ground truths
-            val_pred += [labels_val_pred]
-            val_gt += [labels_val]
+    # -- test
+    log.info(' test')
+    tst_imgs, tst_gt_imgs = tst_l
+    tst_pred, tst_gt = [], []
 
-        # -- test
-        log.info(' test')
-        tst_imgs, tst_gt_imgs = tst_l
-        tst_pred, tst_gt = [], []
-        for img, gt_img in zip(tst_imgs, tst_gt_imgs):
+    if USE_VERENA:
+        verena_pred = []
+        counter = 0
 
-            # -- training vectors
-            f_arr = slm.process(img)
-            h_old, w_old = f_arr.shape[:2]
-            rf_arr = view_as_windows(f_arr, (NBH, NBW, 1))
-            h_new, w_new = rf_arr.shape[:2]
-            X_tst = rf_arr.reshape(h_new * w_new, -1)
-            X_tst = scaler.fit_transform(X_tst)
+    for img, gt_img in zip(tst_imgs, tst_gt_imgs):
 
-            # -- True labels
-            gt_px_x, gt_px_y = slm.rcp_field_central_px_coords(slm.n_layers)
-            labels_tst = gt_img[gt_px_x, gt_px_y].reshape(h_old, w_old)
-            labels_tst = get_reduced_tm(labels_tst, NBH, NBW).ravel()
+        # -- training vectors
+        f_arr = slm.process(img, pad_apron=True, interleave_stride=True)
+        X_tst = f_arr.reshape((f_arr.shape[0] * f_arr.shape[1],
+                               f_arr.shape[2]))
+        X_tst = scaler.transform(X_tst)
 
-            assert X_tst.shape[0] == labels_tst.size
+        # -- True labels
+        y_tst = gt_img.ravel()
 
-            # -- Predicted labels
-            labels_tst_pred = clf.decision_function(X_tst)
+        if USE_VERENA:
+            verena_tst = verena_imgs[counter]
+            verena_tst = verena_tst.ravel()
+            counter += 1
 
-            # -- saving predictions and ground truths
-            tst_pred += [labels_tst_pred]
-            tst_gt += [labels_tst]
+        assert X_tst.shape[0] == y_tst.size
+        assert X_tst.shape[1] == feature_vector_dimension
 
-        # -- storing the predictions for that fold of the cross validation
+        # -- Predicted labels
+        if USE_SUPERCLF:
+            X_new = predict(X_tst, clf_b)
+            X_new = s_scaler.transform(X_new)
+            y_tst_pred = s_clf.decision_function(X_new)
+        else:
+            X_new = predict(X_tst, clf_b)
+            y_tst_pred = X_new.max(axis=1)
+
+        # -- saving predictions and ground truths
+        assert y_tst.size == y_tst_pred.size
+        tst_pred += [y_tst_pred]
+        tst_gt += [y_tst]
+
+        if USE_VERENA:
+            verena_pred += [verena_tst]
+
+    # -- storing the predictions for that fold of the cross validation
+    if USE_VERENA:
+        predictions.append([val_pred, val_gt, tst_pred, tst_gt, verena_pred])
+    else:
         predictions.append([val_pred, val_gt, tst_pred, tst_gt])
 
-    # --------------------
-    # -- Compute metric(s)
-    # --------------------
+# --------------------
+# -- Compute metric(s)
+# --------------------
 
-    log.info('computing metric(s)')
-    val_aps = []
-    tst_aps = []
-    for fold in predictions:
+log.info('computing metric(s)')
+val_aps, val_pearsons, val_spearmans = [], [], []
+tst_aps, tst_pearsons, tst_spearmans = [], [], []
 
+if USE_VERENA:
+    verena_aps, verena_pearsons, verena_spearmans = [], [], []
+
+for fold in predictions:
+
+    if USE_VERENA:
+        val_pred, val_gt, tst_pred, tst_gt, verena_pred = fold
+    else:
         val_pred, val_gt, tst_pred, tst_gt = fold
 
-        # -- computes metric(s) for validation set
-        preds = np.concatenate(val_pred)
-        gts = np.concatenate(val_gt)
-        val_ap = average_precision(gts, preds)
-        val_aps += [val_ap]
-        log.info(' validation AP : %4.2f' % val_ap)
+    # -- computes metric(s) for validation set
+    gts, preds = np.concatenate(val_gt), np.concatenate(val_pred)
+    val_ap = average_precision(gts, preds)
+    val_pearson = pearson(gts, preds)
+    val_spearman = spearman(gts, preds)
+    val_aps += [val_ap]
+    val_pearsons += [val_pearson]
+    val_spearmans += [val_spearman]
+    log.info(' validation AP       : %5.3f' % val_ap)
+    log.info(' validation Pearson  : %5.3f' % val_pearson)
+    log.info(' validation Spearman : %5.3f' % val_spearman)
 
-        # -- computes metric(s) for testing set
-        preds = np.concatenate(tst_pred)
-        gts = np.concatenate(tst_gt)
-        tst_ap = average_precision(gts, preds)
-        tst_aps += [tst_ap]
-        log.info(' test AP       : %4.2f' % tst_ap)
+    # -- computes metric(s) for testing set
+    gts, preds = np.concatenate(tst_gt), np.concatenate(tst_pred)
+    tst_ap = average_precision(gts, preds)
+    tst_pearson = pearson(gts, preds)
+    tst_spearman = spearman(gts, preds)
+    tst_aps += [tst_ap]
+    tst_pearsons += [tst_pearson]
+    tst_spearmans += [tst_spearman]
+    log.info(' test AP       : %5.3f' % tst_ap)
+    log.info(' test Pearson  : %5.3f' % tst_pearson)
+    log.info(' test Spearman : %5.3f' % tst_spearman)
 
-    post = {"slm_description": slm.description,
-            "val_ap": val_aps,
-            "tst_ap": tst_aps}
-    print post
+    if USE_VERENA:
+        gts, preds = np.concatenate(tst_gt), np.concatenate(verena_pred)
+        verena_ap = average_precision(gts, preds)
+        verena_pearson = pearson(gts, preds)
+        verena_spearman = spearman(gts, preds)
+        verena_aps += [verena_ap]
+        verena_pearsons += [verena_pearson]
+        verena_spearmans += [verena_spearman]
+        log.info(' Verena AP       : %5.3f' % verena_ap)
+        log.info(' Verena Pearson  : %5.3f' % verena_pearson)
+        log.info(' Verena Spearman : %5.3f' % verena_spearman)
 
-    #posts.insert(post)
+post = {"epoch": NEPOCH,
+        "genson_seed": DEFAULT_GENSON_SEED,
+        "trn_val_img_idx": DEFAULT_TRN_VAL_IMG_Z_IDX,
+        "tst_img_idx": DEFAULT_TST_IMG_Z_IDX,
+        "randomize": RANDOMIZE,
+        "slm_description": slm.description,
+        "val_ap": val_aps,
+        "tst_ap": tst_aps,
+        "verena_ap": verena_aps,
+        "val_pearson": val_pearsons,
+        "tst_pearson": tst_pearsons,
+        "verena_pearson": verena_pearsons,
+        "val_spearman": val_spearmans,
+        "tst_spearman": tst_spearmans,
+        "verena_spearman": verena_spearmans,
+        "use_super-classifier": USE_SUPERCLF,
+        "negative_to_positive_example_ratio": NEGPOSFRAC
+        }
+
+coll.insert(post)

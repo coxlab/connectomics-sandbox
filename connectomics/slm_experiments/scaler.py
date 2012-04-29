@@ -9,6 +9,12 @@ class OnlineScaler(object):
     def __init__(self, d):
         """initializes an Online Scaler object
 
+        Parameters
+        ----------
+
+        `d`: int
+            dimensionality of the feature vectors
+
         attributes
         ----------
 
@@ -97,5 +103,13 @@ class OnlineScaler(object):
             warnings.warn("Zero standard deviation detected!")
             _std = 1
         out /= _std
+
+        return out
+
+    def fit_transform(self, X):
+
+        self.partial_fit(X)
+
+        out = self.transform(X)
 
         return out
