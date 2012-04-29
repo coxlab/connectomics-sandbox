@@ -7,7 +7,6 @@ VENV_NAME=connectomics-sandbox-slm_experiments-system
 
 # -- export two environment variables
 export CONNECTOMICS_HP_BASE_PATH="/path/to/dataset"
-export
 
 # -- shell dependencies
 command -v mkvirtualenv

@@ -27,7 +27,6 @@ from numpy.random import permutation
 from trn_tst_val_generator import generate
 from sthor.model.slm import SequentialLayeredModel
 import genson
-from parameters import PLOS09
 from asgd import NaiveBinaryASGD as Classifier
 from scaler import OnlineScaler
 from util import get_trn_coords_labels
@@ -46,6 +45,7 @@ coll = db['slm_models']
 # -- defaults
 # -----------
 
+PLOS09 = './plos09.gson'
 DEFAULT_FB_FNAME = '9_9_2.pkl'
 DEFAULT_TRN_VAL_IMG_Z_IDX = [71]
 DEFAULT_TST_IMG_Z_IDX = [3]
