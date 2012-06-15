@@ -11,9 +11,9 @@ import ij.ImagePlus;
 originalLabels = new ImagePlus("/home/npinto/projects/connectomics-sandbox/connectomics/npinto_sandbox/Y_true.tif");
 proposedLabels = new ImagePlus("/home/npinto/projects/connectomics-sandbox/connectomics/npinto_sandbox/Y_pred.tif");
 
-calculatePixelError = new Boolean(false);
-calculateWarpingError = new Boolean(false);
+calculatePixelError = new Boolean(true);
 calculateRandError = new Boolean(true);
+calculateWarpingError = new Boolean(true);
 
 IJ.log("---");
 IJ.log("Evaluating segmentation...");
@@ -30,6 +30,15 @@ if( calculatePixelError )
     IJ.log("  Minimum pixel error: " + (1.0 - maxFScore) );
 }
 
+if( calculateRandError )
+{
+    IJ.log("\nCalculating maximal F-score of Rand index...");
+    metric = new RandError( originalLabels, proposedLabels );
+    maxFScore = metric.getRandIndexMaximalFScore( 0.0, 1.0, 0.1 );
+    IJ.log("  Minimum Rand error: " + (1.0 - maxFScore) );
+}
+
+
 if( calculateWarpingError )
 {
     IJ.log("\nCalculating warping error by minimizing splits and mergers...");
@@ -37,12 +46,4 @@ if( calculateWarpingError )
     warpingError = metric.getMinimumSplitsAndMergersErrorValue( 0.0, 0.9, 0.1, false, 20 );
     IJ.log("  Minimum warping error: " + warpingError);
     IJ.log("  # errors (splits + mergers pixels) = " + Math.round(warpingError * originalLabels.getWidth() * originalLabels.getHeight() * originalLabels.getImageStackSize() ) );
-}
-
-if( calculateRandError )
-{
-    IJ.log("\nCalculating maximal F-score of Rand index...");
-    metric = new RandError( originalLabels, proposedLabels );
-    maxFScore = metric.getRandIndexMaximalFScore( 0.0, 1.0, 0.1 );
-    IJ.log("  Minimum Rand error: " + (1.0 - maxFScore) );
 }
