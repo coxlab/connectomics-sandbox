@@ -2,14 +2,21 @@
 // (1) download Fiji
 // (2) update Fiji
 // (3) run this with something like:
-//     /path/to/fiji-linux64 --headless /path/to/isbi2012-cli.bsh
+//     /path/to/fiji-linux64 --headless /path/to/isbi2012-cli.bsh true.tif pred.tif
 
 import trainableSegmentation.metrics.*;
 import ij.IJ;
 import ij.ImagePlus;
 
-originalLabels = new ImagePlus("/home/npinto/projects/connectomics-sandbox/connectomics/npinto_sandbox/Y_true.tif");
-proposedLabels = new ImagePlus("/home/npinto/projects/connectomics-sandbox/connectomics/npinto_sandbox/Y_pred.tif");
+if( bsh.args.length != 2)
+{
+    print("Error: wrong number of arguments!\n");
+    print("Usage: /path/to/fiji-linux64 --headless true.tif pred.tif");
+    return;
+}
+
+originalLabels = new ImagePlus(bsh.args[0]);
+proposedLabels = new ImagePlus(bsh.args[1]);
 
 calculatePixelError = new Boolean(true);
 calculateRandError = new Boolean(true);
@@ -19,7 +26,6 @@ IJ.log("---");
 IJ.log("Evaluating segmentation...");
 IJ.log("  Original labels: " + originalLabels.getTitle());
 IJ.log("  Proposed labels: " + proposedLabels.getTitle() + "\n");
-
 
 // Calculate segmentation error with the selected metrics
 if( calculatePixelError )
