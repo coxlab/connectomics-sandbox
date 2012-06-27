@@ -26,11 +26,12 @@ DEFAULT_LEARNING = 'randn'
 DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
     factr=1e7,
+    #factr=1e12,
     maxfun=1e4,
     )
 
 
-from sklearn.decomposition import RandomizedPCA
+#from sklearn.decomposition import RandomizedPCA
 
 
 class RPLogReg2(object):
@@ -41,7 +42,7 @@ class RPLogReg2(object):
                  n_filters=DEFAULT_N_FILTERS,
                  lbfgs_params=DEFAULT_LBFGS_PARAMS,
                  learning=DEFAULT_LEARNING,
-                 pca_n_components=100,
+                 #pca_n_components=100,
                 ):
 
         self.rf_size = rf_size
@@ -55,8 +56,8 @@ class RPLogReg2(object):
         # XXX: seed
 
         self.fbl = None
-        self.pca = RandomizedPCA(pca_n_components, whiten=True,
-                                 random_state=np.random.RandomState(42))
+        #self.pca = RandomizedPCA(pca_n_components, whiten=True,
+                                 #random_state=np.random.RandomState(42))
 
     def transform(self, X, with_fit=False):
 
@@ -194,12 +195,18 @@ class RPLogReg2(object):
                                 #allow_input_downcast=True)
 
         w = np.zeros(X.shape[1], dtype='float32')
+        #w = X[10]
         w_size = w.size
         b = np.zeros(1, dtype='float32')
 
         Y_true = 2. * Y_true - 1
 
-        m = 0.1
+        m = 0.2
+
+        def theano_pearson_normalize_vector(X):
+            Xm = X - X.mean()
+            Xmn = Xm / (tensor.sqrt(tensor.dot(Xm, Xm)) + 1e-3)
+            return Xmn
 
         # -- theano variables
         t_X = tensor.fmatrix()
@@ -212,8 +219,21 @@ class RPLogReg2(object):
 
         t_M = t_y * t_H
 
-        t_loss = tensor.mean(tensor.maximum(0, 1 - t_M - m) ** 2.)
-        #t_loss = tensor.mean((1 - t_M) ** 2.)
+        t_yb = (t_y + 1) / 2
+        m_pos = 0.5
+        m_neg = 0
+        t_loss = tensor.mean((t_yb * (tensor.maximum(0, 1 - t_M - m_pos) ** 2.)))
+        t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg) ** 2.)
+        #t_loss = 1 - tensor.dot(
+            #theano_pearson_normalize_vector(t_y.flatten()),
+            #theano_pearson_normalize_vector(t_H.flatten())
+            #)
+        #from bangreadout.util import theano_corrcoef
+        #t_loss = 1 - theano_corrcoef(t_y.flatten(), t_H.flatten())
+        #t_loss = 1 - theano_pearson_normalize(t_y.ravel(), t_H.ravel())
+
+        #t_loss = tensor.mean(tensor.maximum(0, 1 - t_M - m) ** 2.)
+        ##t_loss = tensor.mean((1 - t_M) ** 2.)
         #t_loss = tensor.mean(tensor.maximum(0, 1 - t_M - m))
         t_dloss_dw = tensor.grad(t_loss, t_w)
         t_dloss_db = tensor.grad(t_loss, t_b)
@@ -279,7 +299,8 @@ def main():
     learning = 'imprint'
     #DEBUG = False
     N_IMGS = 1
-    pca_n_components = 100
+    N_IMGS_VAL = 1
+    #pca_n_components = 100
 
     np.random.seed(42)
 
@@ -297,24 +318,45 @@ def main():
     trn_Y_l = []
     for i in range(N_IMGS):
         trn_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i
+        print trn_fname
         trn_X = (misc.imread(trn_fname, flatten=True) / 255.).astype('f')
-        trn_X -= trn_X.min()
-        trn_X /= trn_X.max()
-        #trn_X -= trn_X.mean()
-        #trn_X /= trn_X.std()
+        #trn_X -= trn_X.min()
+        #trn_X /= trn_X.max()
+        trn_X -= trn_X.mean()
+        trn_X /= trn_X.std()
         trn_Y = (misc.imread(trn_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
         trn_X_l += [trn_X]
         trn_Y_l += [trn_Y]
     trn_X = np.array(trn_X_l).reshape(N_IMGS*512, 512)
     trn_Y = np.array(trn_Y_l).reshape(N_IMGS*512, 512)
 
+    print 'validation image'
+    val_X_l = []
+    val_Y_l = []
+    for j in range(N_IMGS_VAL):
+        k = j + i + 1
+        val_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % k
+        print val_fname
+        val_X = (misc.imread(val_fname, flatten=True) / 255.).astype('f')
+        #val_X -= val_X.min()
+        #val_X /= val_X.max()
+        val_X -= val_X.mean()
+        val_X /= val_X.std()
+        val_Y = (misc.imread(val_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
+        val_X_l += [val_X]
+        val_Y_l += [val_Y]
+    val_X = np.array(val_X_l).reshape(N_IMGS_VAL*512, 512)
+    val_Y = np.array(val_Y_l).reshape(N_IMGS_VAL*512, 512)
+
+
     print 'testing image'
     tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
+    print tst_fname
     tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-    tst_X -= tst_X.min()
-    tst_X /= tst_X.max()
-    #tst_X -= tst_X.mean()
-    #tst_X /= tst_X.std()
+    #tst_X -= tst_X.min()
+    #tst_X /= tst_X.max()
+    tst_X -= tst_X.mean()
+    tst_X /= tst_X.std()
     tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
 
     # --
@@ -323,7 +365,8 @@ def main():
                      n_filters=n_filters,
                      lbfgs_params=lbfgs_params,
                      learning=learning,
-                     pca_n_components=pca_n_components)
+                     #pca_n_components=pca_n_components,
+                    )
     start = time.time()
     #trn_X -= trn_X.min()
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
@@ -331,17 +374,49 @@ def main():
     mdl1.fit(trn_X, trn_Y)
     #trn_X1 = mdl1.predict(trn_X)[..., 0]
 
+    if 0:
+        fs = 11
+        from bangreadout import LBFGSLogisticClassifier
+        val_Y_pred = mdl1.predict(val_X)
+        val_Y_pred = np.dstack((val_X[..., np.newaxis], val_Y_pred))
+        val_Y_pred_rv = view_as_windows(filter_pad2d(val_Y_pred, (fs, fs)), (fs, fs, 1))
+        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+        val_Y_pred = val_Y_pred_rv.reshape(np.prod(val_Y_pred.shape[:2]), -1)
+        n_ff = val_Y_pred.shape[-1]
+
+        logreg = LBFGSLogisticClassifier(n_features=val_Y_pred.shape[-1])
+        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+
+        zmuv_rows_inplace(val_Y_pred.T)
+        logreg.fit(val_Y_pred, val_Y.ravel()>0)
+
+        Y_pred1 = mdl1.predict(tst_X)
+        #zmuv_rows_inplace(Y_pred1.T)
+        Y_pred1 = np.dstack((tst_X[..., np.newaxis], Y_pred1))
+        Y_pred2 = view_as_windows(filter_pad2d(Y_pred1, (fs, fs)), (fs, fs, 1)).reshape(-1, n_ff)
+        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+        zmuv_rows_inplace(Y_pred2.T)
+        Y_pred2 = logreg.transform(Y_pred2).reshape(512, 512)
+        Y_pred = Y_pred2
+    else:
+        Y_pred = mdl1.predict(tst_X)[..., 0]
+
+    #trn_X1 = mdl1.predict(trn_X)[..., 0]
+
+    #mdl2 = RPLogReg1(rf_size=rf_size,
+                     #lnorm_size=lnorm_size,
+                     #n_filters=n_filters)
     #mdl2 = RPLogReg1(rf_size=rf_size,
                      #lnorm_size=lnorm_size,
                      #n_filters=n_filters)
     #mdl2.fit(trn_X1, trn_Y.astype(bool))
 
     #Y_pred = mdl2.predict(mdl1.predict(tst_X)[..., 0])
-    print 'pca...'
+    #print 'pca...'
     #tst_X = pca.transform(tst_X)
-    Y_pred = mdl1.predict(tst_X)[..., 0]
+    #Y_pred = mdl1.predict(tst_X)[..., 0]
     #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-    Y_pred = Y_pred + (tst_X * tst_X <= 0.1)
+    #Y_pred = Y_pred + (tst_X * tst_X <= 0.1)
     Y_true = tst_Y.copy()
     print 'pe =', pearson(Y_true.ravel(), Y_pred.ravel())
     end = time.time()
@@ -352,8 +427,9 @@ def main():
     io.use_plugin('freeimage')
     Y_pred -= Y_pred.min()
     Y_pred /= Y_pred.max()
-    Y_pred = Y_pred[16:-16, 16:-16]
-    Y_true = Y_true[16:-16, 16:-16]
+    offset = 32
+    Y_pred = Y_pred[offset:-offset, offset:-offset]
+    Y_true = Y_true[offset:-offset, offset:-offset]
     print Y_pred.shape
     io.imsave('Y_pred.tif', Y_pred, plugin='freeimage')
     io.imsave('Y_true.tif', Y_true, plugin='freeimage')
