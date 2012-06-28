@@ -54,7 +54,7 @@ class RPLogReg2(object):
 
     def transform(self, X, with_fit=False):
 
-        assert X.ndim == 3 or X.ndim == 2
+        assert X.ndim == 2
 
         rf_size = self.rf_size
         lnorm_size = self.lnorm_size
@@ -75,7 +75,6 @@ class RPLogReg2(object):
         X2 = view_as_windows(X2, rf_size)
         X2 = X2.reshape(np.prod(X.shape[:2]), -1)
         X = X2
-        print X.shape
 
         print 'zero-mean / unit-variance'
         zmuv_rows_inplace(X.T)
@@ -114,7 +113,7 @@ class RPLogReg2(object):
 
     def fit(self, X, Y):
 
-        assert X.ndim == 3 or X.ndim == 2
+        assert X.ndim == 2
         assert Y.ndim == 2
 
         Y = Y.reshape(Y.size, 1)
@@ -123,6 +122,7 @@ class RPLogReg2(object):
 
         X = self.transform(X, with_fit=True)
         X = X.reshape(-1, X.shape[-1]).astype('float32')
+        import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
 
         print X.shape
 
@@ -157,11 +157,9 @@ class RPLogReg2(object):
 
         t_yb = (t_y + 1) / 2
         m_pos = 0.5
-        m_neg = 0
+        m_neg = 0.1
         t_loss = tensor.mean((t_yb * (tensor.maximum(0, 1 - t_M - m_pos) ** 2.)))
-        #t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg) ** 2.)
-        t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg))
-        #t_loss += tensor.mean((1 - t_yb) * tensor.exp(-t_M))
+        t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg) ** 2.)
 
         #t_loss = 1 - tensor.dot(
             #theano_pearson_normalize_vector(t_y.flatten()),
@@ -216,7 +214,9 @@ class RPLogReg2(object):
         X_shape = X.shape
 
         X = self.transform(X)
-        X = X.reshape(-1, X.shape[-1])
+        X = X.reshape(-1, X.shape[-1]).astype('f')
+
+        import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
 
         Y_pred = self._f(X, self.w, self.b)
         Y_pred = Y_pred.reshape(X_shape[:2] + (-1,))
@@ -250,7 +250,6 @@ def main():
     trn_X_l = []
     trn_Y_l = []
     for i in range(N_IMGS):
-        #i += 4
         trn_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i
         print trn_fname
         trn_X = (misc.imread(trn_fname, flatten=True) / 255.).astype('f')
@@ -284,31 +283,14 @@ def main():
 
 
     print 'testing image'
-    tst_X_l = []
-    tst_Y_l = []
-    for i in range(N_IMGS):
-        #i += 4
-        tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % (29-i)
-        print tst_fname
-        tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-        #tst_X -= tst_X.min()
-        #tst_X /= tst_X.max()
-        tst_X -= tst_X.mean()
-        tst_X /= tst_X.std()
-        tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
-        tst_X_l += [tst_X]
-        tst_Y_l += [tst_Y]
-    tst_X = np.array(tst_X_l).reshape(N_IMGS*512, 512)
-    tst_Y = np.array(tst_Y_l).reshape(N_IMGS*512, 512)
-
-    #tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
-    #print tst_fname
-    #tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-    ##tst_X -= tst_X.min()
-    ##tst_X /= tst_X.max()
-    #tst_X -= tst_X.mean()
-    #tst_X /= tst_X.std()
-    #tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
+    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
+    print tst_fname
+    tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
+    #tst_X -= tst_X.min()
+    #tst_X /= tst_X.max()
+    tst_X -= tst_X.mean()
+    tst_X /= tst_X.std()
+    tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
 
     # --
     mdl1 = RPLogReg2(rf_size=rf_size,
@@ -321,21 +303,10 @@ def main():
     start = time.time()
     #trn_X -= trn_X.min()
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
-    #trn_X = np.dstack((trn_X_l[0][..., np.newaxis],
-                       #trn_X_l[1][..., np.newaxis],))
-    trn_X = trn_X_l[0]
-    trn_Y = trn_Y_l[0]
-    #tst_X = np.dstack((tst_X_l[0][..., np.newaxis],
-                       #tst_X_l[1][..., np.newaxis],))
-    tst_X = tst_X_l[0]
-    tst_Y = tst_Y_l[0]
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
     print 'model...'
     mdl1.fit(trn_X, trn_Y)
     Y_trn_pred = mdl1.predict(trn_X)[..., 0]
-    misc.imsave("X_trn.png", np.atleast_3d(trn_X)[..., 0])
     misc.imsave("Y_trn_pred.png", Y_trn_pred)
-    misc.imsave("Y_trn_true.png", trn_Y)
 
     #w = None
     #b = None

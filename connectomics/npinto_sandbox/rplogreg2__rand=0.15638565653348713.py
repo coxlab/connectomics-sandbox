@@ -1,3 +1,7 @@
+#Minimum pixel error: 0.05486278427454905
+#Minimum Rand error: 0.16318234412370003
+#Minimum warping error: 0.0020577566964285715
+
 import numpy as np
 
 import theano
@@ -10,7 +14,6 @@ matplotlib.use("Agg")
 
 from bangmetric.correlation import  pearson
 #from bangmetric.precision_recall import average_precision
-#from bangreadout.util import normalize_pearson_like
 from skimage.util.shape import view_as_windows
 from bangreadout import zmuv_rows_inplace
 
@@ -26,8 +29,12 @@ DEFAULT_LEARNING = 'randn'
 DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
     factr=1e7,
+    #factr=1e12,
     maxfun=1e4,
     )
+
+
+#from sklearn.decomposition import RandomizedPCA
 
 
 class RPLogReg2(object):
@@ -45,24 +52,25 @@ class RPLogReg2(object):
         self.lnorm_size = lnorm_size
         self.n_filters = n_filters
         self.learning = learning
+
         self.fb = None
+
         self.lbfgs_params = lbfgs_params
         # XXX: seed
+
         self.fbl = None
-        self.w = None
-        self.b = None
+        #self.pca = RandomizedPCA(pca_n_components, whiten=True,
+                                 #random_state=np.random.RandomState(42))
 
     def transform(self, X, with_fit=False):
 
-        assert X.ndim == 3 or X.ndim == 2
+        assert X.ndim == 2
 
         rf_size = self.rf_size
         lnorm_size = self.lnorm_size
         n_filters = self.n_filters
         X_shape = X.shape
         learning = self.learning
-
-        rf_size = rf_size + (1, )
 
         if lnorm_size is not None:
             X2 = filter_pad2d(np.atleast_3d(X), lnorm_size)
@@ -71,14 +79,16 @@ class RPLogReg2(object):
                 #lcdnorm3(X2, lnorm_size, contrast=True),
             ))
 
+        rf_size = rf_size + (1, )
         X2 = filter_pad2d(X2, rf_size[:2])
         X2 = view_as_windows(X2, rf_size)
         X2 = X2.reshape(np.prod(X.shape[:2]), -1)
         X = X2
-        print X.shape
 
         print 'zero-mean / unit-variance'
         zmuv_rows_inplace(X.T)
+        #X -= X.mean(0)
+        #X /= X.std(0)
 
         if n_filters > 0:
             if self.fb is None:
@@ -87,23 +97,44 @@ class RPLogReg2(object):
                     fb = self.fb = np.random.randn(X.shape[1], n_filters).astype('f')
                 elif learning == 'imprint':
                     ridx = np.random.permutation(len(X))[:n_filters]
-                    fb = X[ridx].copy()
-                    fb = fb.T
-                    self.fb = fb
+                    fb = self.fb = X[ridx].T.copy()
                 else:
                     raise ValueError("'%s' learning not understood"
                                      % learning)
             else:
                 fb = self.fb
             print 'dot...'
-
             Xnew = np.dot(X, fb) ** 2.
             print Xnew.shape
+            #print 'cast float16'
+            #X = X.astype(np.float16)
+            #print 'pos'
+            #pos = Xnew.clip(0, np.inf) ** 2.
+            #Xnew = pos
+            #Xnew = X
+            #print 'neg'
+            #neg = (-Xnew).clip(0, np.inf) ** 2.
+            #del X
+            #print 'hstack'
+            #Xnew = np.hstack((pos, neg))
+            #assert np.isfinite(X).all()
+            #print X.shape, X.dtype
+            #print 'cast float32'
+            #X = X.astype(np.float32)
+
             X = np.column_stack((X, Xnew))
+
+            #print 'pca...'
+            #if with_fit:
+                #print X.dtype
+                #X = self.pca.fit_transform(X).astype('f')
+            #else:
+                #X = self.pca.transform(X).astype('f')
 
             print 'zero-mean / unit-variance'
             zmuv_rows_inplace(X.T)
-
+            #Xnew -= Xnew.mean(0)
+            #Xnew /= Xnew.std(0)
             assert np.isfinite(X).all()
 
 
@@ -114,8 +145,10 @@ class RPLogReg2(object):
 
     def fit(self, X, Y):
 
-        assert X.ndim == 3 or X.ndim == 2
+        assert X.ndim == 2
         assert Y.ndim == 2
+
+        #assert Y.dtype == bool
 
         Y = Y.reshape(Y.size, 1)
         Y_true = Y.ravel().astype(long)
@@ -124,15 +157,50 @@ class RPLogReg2(object):
         X = self.transform(X, with_fit=True)
         X = X.reshape(-1, X.shape[-1]).astype('float32')
 
+        #Yv = Y.ravel()
+        #pos_mask = Yv > 0
+        #pos_idx = np.arange(len(Yv))[pos_mask]
+        #neg_idx = np.arange(len(Yv))[~pos_mask]
+
         print X.shape
 
-        if self.w is None:
-            w = np.zeros(X.shape[1], dtype='float32')
-            b = np.zeros(1, dtype='float32')
-        else:
-            w = self.w
-            b = self.b
+        # -- initial variables
+        #W = np.ones((X.shape[1], 2), dtype='float32')
+        #W_size = W.size
+        #W_shape = W.shape
+        #b = np.zeros((2), dtype='float32')
+
+        ## -- theano program
+        #_X = T.fmatrix()
+        #_b = T.fvector()  # could be Theano shared variable
+        #_W = T.fmatrix()  # same
+        #_Y_true = T.lvector()
+        #_pos_idx = T.lvector()
+        #_neg_idx = T.lvector()
+
+        #_Y = T.dot(_X, _W) + _b
+        #_Y_pred = T.nnet.softmax(_Y)
+
+        #_loss = -T.mean(T.log(_Y_pred)[T.arange(_Y_true.shape[0]), _Y_true])
+        ##_loss_pos = -T.mean(T.log(_Y_pred[_pos_idx])[T.arange(_Y_true[_pos_idx].shape[0]), _Y_true[_pos_idx]])
+        ##_loss_neg = -T.mean(T.log(_Y_pred[_neg_idx])[T.arange(_Y_true[_neg_idx].shape[0]), _Y_true[_neg_idx]])
+        ##_loss = 1. * _loss_pos + 1e-1 * _loss_neg
+
+        #_dloss_W = T.grad(_loss, _W)
+        #_dloss_b = T.grad(_loss, _b)
+
+        #_f = theano.function([_X, _W, _b],
+                             #[_Y_pred],
+                             #allow_input_downcast=True)
+
+        #_f_df = theano.function([_X, _Y_true, _W, _b, _pos_idx, _neg_idx],
+                                #[_Y_pred, _loss, _dloss_W, _dloss_b],
+                                #allow_input_downcast=True)
+
+        w = np.zeros(X.shape[1], dtype='float32')
+        #w = X[10]
         w_size = w.size
+        b = np.zeros(1, dtype='float32')
 
         Y_true = 2. * Y_true - 1
 
@@ -150,8 +218,7 @@ class RPLogReg2(object):
         t_b = tensor.fscalar()
 
         t_H = tensor.dot(t_X, t_w) + t_b
-        #t_H = 2. * tensor.nnet.sigmoid(t_H) - 1
-        t_H = tensor.tanh(t_H)
+        t_H = 2. * tensor.nnet.sigmoid(t_H) - 1
 
         t_M = t_y * t_H
 
@@ -159,10 +226,7 @@ class RPLogReg2(object):
         m_pos = 0.5
         m_neg = 0
         t_loss = tensor.mean((t_yb * (tensor.maximum(0, 1 - t_M - m_pos) ** 2.)))
-        #t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg) ** 2.)
-        t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg))
-        #t_loss += tensor.mean((1 - t_yb) * tensor.exp(-t_M))
-
+        t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg) ** 2.)
         #t_loss = 1 - tensor.dot(
             #theano_pearson_normalize_vector(t_y.flatten()),
             #theano_pearson_normalize_vector(t_H.flatten())
@@ -193,8 +257,10 @@ class RPLogReg2(object):
             w = vars[:w_size]
             b = vars[w_size:]
             # get loss and gradients from theano function
+            #Y_pred, loss, dloss_W, dloss_b = _f_df(X, Y_true, w, b)
             Y_pred, loss, dloss_w, dloss_b = _f_df(X, Y_true, w, b[0])
             try:
+                #print 'ap', average_precision(Y_true.ravel(), Y_pred[:, 1].ravel())
                 print 'pe =', pearson(Y_true.ravel(), Y_pred.ravel())
             except (AssertionError, ValueError):
                 pass
@@ -205,6 +271,8 @@ class RPLogReg2(object):
         vars = np.concatenate([w.ravel(), b.ravel()])
         best, bestval, info = fmin_l_bfgs_b(func, vars, **self.lbfgs_params)
 
+        #self.W = best[:W_size].reshape(W_shape)
+        #self.b = best[W_size:]
         self.w = best[:w_size]
         self.b = best[w_size:][0]
         self._f = _f
@@ -226,14 +294,16 @@ class RPLogReg2(object):
 
 def main():
 
+    #rf_size = (51, 51)
     rf_size = (21, 21)
     lnorm_size = (11, 11)
     n_filters = 512
     #learning = 'randn'
     learning = 'imprint'
-    #learning = 'imprint_neg'
+    #DEBUG = False
     N_IMGS = 1
     N_IMGS_VAL = 1
+    #pca_n_components = 100
 
     np.random.seed(42)
 
@@ -250,7 +320,6 @@ def main():
     trn_X_l = []
     trn_Y_l = []
     for i in range(N_IMGS):
-        #i += 4
         trn_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i
         print trn_fname
         trn_X = (misc.imread(trn_fname, flatten=True) / 255.).astype('f')
@@ -284,31 +353,14 @@ def main():
 
 
     print 'testing image'
-    tst_X_l = []
-    tst_Y_l = []
-    for i in range(N_IMGS):
-        #i += 4
-        tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % (29-i)
-        print tst_fname
-        tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-        #tst_X -= tst_X.min()
-        #tst_X /= tst_X.max()
-        tst_X -= tst_X.mean()
-        tst_X /= tst_X.std()
-        tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
-        tst_X_l += [tst_X]
-        tst_Y_l += [tst_Y]
-    tst_X = np.array(tst_X_l).reshape(N_IMGS*512, 512)
-    tst_Y = np.array(tst_Y_l).reshape(N_IMGS*512, 512)
-
-    #tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
-    #print tst_fname
-    #tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-    ##tst_X -= tst_X.min()
-    ##tst_X /= tst_X.max()
-    #tst_X -= tst_X.mean()
-    #tst_X /= tst_X.std()
-    #tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
+    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
+    print tst_fname
+    tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
+    #tst_X -= tst_X.min()
+    #tst_X /= tst_X.max()
+    tst_X -= tst_X.mean()
+    tst_X /= tst_X.std()
+    tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
 
     # --
     mdl1 = RPLogReg2(rf_size=rf_size,
@@ -321,42 +373,11 @@ def main():
     start = time.time()
     #trn_X -= trn_X.min()
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
-    #trn_X = np.dstack((trn_X_l[0][..., np.newaxis],
-                       #trn_X_l[1][..., np.newaxis],))
-    trn_X = trn_X_l[0]
-    trn_Y = trn_Y_l[0]
-    #tst_X = np.dstack((tst_X_l[0][..., np.newaxis],
-                       #tst_X_l[1][..., np.newaxis],))
-    tst_X = tst_X_l[0]
-    tst_Y = tst_Y_l[0]
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
     print 'model...'
+    from skimage.filter import median_filter
+    #trn_X = median_filter(trn_X)
     mdl1.fit(trn_X, trn_Y)
-    Y_trn_pred = mdl1.predict(trn_X)[..., 0]
-    misc.imsave("X_trn.png", np.atleast_3d(trn_X)[..., 0])
-    misc.imsave("Y_trn_pred.png", Y_trn_pred)
-    misc.imsave("Y_trn_true.png", trn_Y)
-
-    #w = None
-    #b = None
-    #for i, (trn_X, trn_Y) in enumerate(zip(trn_X_l, trn_Y_l)):
-        #mdl1.fit(trn_X, trn_Y)
-        #lr = 1. / (i + 1.)
-        #if w is None:
-            #w = mdl1.w.copy()
-            #b = mdl1.b.copy()
-        #else:
-            #w = (1 - lr) * w + lr * mdl1.w
-            #b = (1 - lr) * b + lr * mdl1.b
-
-    #mdl1.w = w.copy()
-    #mdl1.b = b.copy()
-
-    #Y_pred1 = mdl1.predict(trn_X)
-    #from rand_warp import rand_warp
-    #Y_warp = rand_warp(trn_Y>0, Y_pred1>0.5)[..., 0]
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-    #mdl1.fit(trn_X, Y_warp)
+    #trn_X1 = mdl1.predict(trn_X)[..., 0]
 
     if 0:
         fs = 11
@@ -384,6 +405,7 @@ def main():
         Y_pred = Y_pred2
     else:
         Y_pred = mdl1.predict(tst_X)[..., 0]
+        Y_pred = median_filter(Y_pred, radius=3)
 
     #trn_X1 = mdl1.predict(trn_X)[..., 0]
 
