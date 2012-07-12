@@ -1,7 +1,3 @@
-#Minimum pixel error: 0.05486278427454905
-#Minimum Rand error: 0.16318234412370003
-#Minimum warping error: 0.0020577566964285715
-
 import numpy as np
 
 import theano
@@ -13,7 +9,6 @@ import matplotlib
 matplotlib.use("Agg")
 
 from bangmetric.correlation import  pearson
-#from bangmetric.precision_recall import average_precision
 from skimage.util.shape import view_as_windows
 from bangreadout import zmuv_rows_inplace
 
@@ -29,12 +24,8 @@ DEFAULT_LEARNING = 'randn'
 DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
     factr=1e7,
-    #factr=1e12,
     maxfun=1e4,
     )
-
-
-#from sklearn.decomposition import RandomizedPCA
 
 
 class RPLogReg2(object):
@@ -373,10 +364,53 @@ def main():
     start = time.time()
     #trn_X -= trn_X.min()
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
-    print 'model...'
-    from skimage.filter import median_filter
+    from sthor.model import parameters
+    from sthor.model import slm
+    from bangreadout import logistic
+    from sthor import util
+
+    # XXXX: HERE XXXX
+    desc = parameters.fg11.fg11_ht_l3_1_description
+    m = slm.SequentialLayeredModel(trn_X.shape, desc)
+
+    print 'pad'
+    #X = util.arraypad.pad(trn_X, (np.array(m.receptive_field_shape) // 2)[0], mode='symmetric')
+    #m = slm.SequentialLayeredModel(X.shape, desc)
+
+    #print 'transform'
+    #r = m.transform(X, interleave_stride=True)
+    r = np.load('rtmp.npy')
+
+    c = logistic.AverageLBFGSLogisticClassifier(256)
+    #c.fit(r.reshape(-1, r.shape[-1]), (trn_Y>0).ravel())
+    a = r.reshape(-1, r.shape[-1])[::5]
+    b = (trn_Y>0).ravel()[::5]
+    c.fit(a, b)
+    raise
+
+    #pearson(trn_Y, gv)
+    #pearson(trn_Y.ravel(), gv.ravel())
+    #r.reshape(-1, 256)
+    #r.reshape(-1, 256).shape
+    #c.fit(r.reshape(-1, 256)[::100])
+    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2)))
+    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2))
+    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2)[::100])
+    #c.fit(r.reshape(-1, 256)[::10], (trn_Y>0).reshape(512**2)[::10])
+    #gv = c.transform(r.reshape(-1, 256))
+    #pearson(trn_Y.ravel(), gv.ravel())
+    #c.fit(r.reshape(-1, 256)[::5], (trn_Y>0).reshape(512**2)[::5])
+    #gv = c.transform(r.reshape(-1, 256)[1::5])
+    #pearson(trn_Y.ravel()[1::5], gv.ravel())
+    #[c.partial_fit(r.reshape(-1, 256)[i::10], (trn_Y>0).reshape(512**2)[i::10]) for i in xrange(10)]
+    #c = logistic.LBFGSLogisticClassifier(256)
+    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2)[::100])
+    #logistic.LBFGSLogisticClassifier(256)
+    #[logistic.LBFGSLogisticClassifier(256).fit(r.reshape(-1, 256)[i::10], (trn_Y>0).reshape(512**2)[i::10]) for i in xrange(10)]
 
     import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+    print 'model...'
+    from skimage.filter import median_filter
     #trn_X = median_filter(trn_X)
     mdl1.fit(trn_X, trn_Y)
     #trn_X1 = mdl1.predict(trn_X)[..., 0]
@@ -446,3 +480,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

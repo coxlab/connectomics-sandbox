@@ -373,10 +373,9 @@ def main():
     start = time.time()
     #trn_X -= trn_X.min()
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
+    import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
     print 'model...'
     from skimage.filter import median_filter
-
-    import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
     #trn_X = median_filter(trn_X)
     mdl1.fit(trn_X, trn_Y)
     #trn_X1 = mdl1.predict(trn_X)[..., 0]

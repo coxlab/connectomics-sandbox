@@ -353,7 +353,7 @@ def main():
 
 
     print 'testing image'
-    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
+    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-28.png'
     print tst_fname
     tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
     #tst_X -= tst_X.min()

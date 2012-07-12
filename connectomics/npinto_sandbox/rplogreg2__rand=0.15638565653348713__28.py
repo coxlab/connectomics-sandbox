@@ -353,7 +353,7 @@ def main():
 
 
     print 'testing image'
-    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
+    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-28.png'
     print tst_fname
     tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
     #tst_X -= tst_X.min()
@@ -375,8 +375,6 @@ def main():
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
     print 'model...'
     from skimage.filter import median_filter
-
-    import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
     #trn_X = median_filter(trn_X)
     mdl1.fit(trn_X, trn_Y)
     #trn_X1 = mdl1.predict(trn_X)[..., 0]
