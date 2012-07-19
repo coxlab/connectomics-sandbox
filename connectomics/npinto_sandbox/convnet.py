@@ -12,6 +12,9 @@ from sthor.util import arraypad
 from skimage.util import view_as_windows
 import time
 
+from os import path, environ
+HOME = environ.get("HOME")
+
 from bangmetric import *
 
 #l = (misc.lena() / 1.).astype('f')
@@ -41,7 +44,8 @@ def get_X_Y():
     trn_X_l = []
     trn_Y_l = []
     for i in range(N_IMGS):
-        trn_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i
+        trn_fname = path.join(
+            HOME, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i)
         print trn_fname
         trn_X = (misc.imread(trn_fname, flatten=True) / 255.).astype('f')
         #trn_X -= trn_X.min()
@@ -59,7 +63,8 @@ def get_X_Y():
     val_Y_l = []
     for j in range(N_IMGS_VAL):
         k = j + i + 1
-        val_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % k
+        val_fname = path.join(
+            HOME, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % k)
         print val_fname
         val_X = (misc.imread(val_fname, flatten=True) / 255.).astype('f')
         #val_X -= val_X.min()
@@ -74,7 +79,7 @@ def get_X_Y():
 
 
     print 'testing image'
-    tst_fname = '/home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png'
+    tst_fname = path.join(HOME, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png')
     print tst_fname
     tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
     #tst_X -= tst_X.min()
