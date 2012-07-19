@@ -28,179 +28,35 @@ DEFAULT_LBFGS_PARAMS = dict(
     )
 
 
-class RPLogReg2(object):
+class LogRegG(object):
 
     def __init__(self,
-                 rf_size=DEFAULT_RF_SIZE,
-                 lnorm_size=DEFAULT_LNORM_SIZE,
-                 n_filters=DEFAULT_N_FILTERS,
                  lbfgs_params=DEFAULT_LBFGS_PARAMS,
-                 learning=DEFAULT_LEARNING,
-                 #pca_n_components=100,
                 ):
 
-        self.rf_size = rf_size
-        self.lnorm_size = lnorm_size
-        self.n_filters = n_filters
-        self.learning = learning
-
-        self.fb = None
-
         self.lbfgs_params = lbfgs_params
-        # XXX: seed
 
-        self.fbl = None
-        #self.pca = RandomizedPCA(pca_n_components, whiten=True,
-                                 #random_state=np.random.RandomState(42))
-
-    def transform(self, X, with_fit=False):
-
-        assert X.ndim == 2
-
-        rf_size = self.rf_size
-        lnorm_size = self.lnorm_size
-        n_filters = self.n_filters
-        X_shape = X.shape
-        learning = self.learning
-
-        if lnorm_size is not None:
-            X2 = filter_pad2d(np.atleast_3d(X), lnorm_size)
-            X2 = np.dstack((
-                lcdnorm3(X2, lnorm_size, contrast=False),
-                #lcdnorm3(X2, lnorm_size, contrast=True),
-            ))
-
-        rf_size = rf_size + (1, )
-        X2 = filter_pad2d(X2, rf_size[:2])
-        X2 = view_as_windows(X2, rf_size)
-        X2 = X2.reshape(np.prod(X.shape[:2]), -1)
-        X = X2
-
-        print 'zero-mean / unit-variance'
-        zmuv_rows_inplace(X.T)
-        #X -= X.mean(0)
-        #X /= X.std(0)
-
-        if n_filters > 0:
-            if self.fb is None:
-                print "'learning' with %s..." % learning
-                if learning == 'randn':
-                    fb = self.fb = np.random.randn(X.shape[1], n_filters).astype('f')
-                elif learning == 'imprint':
-                    ridx = np.random.permutation(len(X))[:n_filters]
-                    fb = self.fb = X[ridx].T.copy()
-                else:
-                    raise ValueError("'%s' learning not understood"
-                                     % learning)
-            else:
-                fb = self.fb
-            print 'dot...'
-            Xnew = np.dot(X, fb) ** 2.
-            print Xnew.shape
-            #print 'cast float16'
-            #X = X.astype(np.float16)
-            #print 'pos'
-            #pos = Xnew.clip(0, np.inf) ** 2.
-            #Xnew = pos
-            #Xnew = X
-            #print 'neg'
-            #neg = (-Xnew).clip(0, np.inf) ** 2.
-            #del X
-            #print 'hstack'
-            #Xnew = np.hstack((pos, neg))
-            #assert np.isfinite(X).all()
-            #print X.shape, X.dtype
-            #print 'cast float32'
-            #X = X.astype(np.float32)
-
-            X = np.column_stack((X, Xnew))
-
-            #print 'pca...'
-            #if with_fit:
-                #print X.dtype
-                #X = self.pca.fit_transform(X).astype('f')
-            #else:
-                #X = self.pca.transform(X).astype('f')
-
-            print 'zero-mean / unit-variance'
-            zmuv_rows_inplace(X.T)
-            #Xnew -= Xnew.mean(0)
-            #Xnew /= Xnew.std(0)
-            assert np.isfinite(X).all()
-
-
-        X = X.reshape(X_shape[:2] + (-1,))
-        print X.shape
-
-        return X
+    def partial_fit(self, X, Y):
+        return self.fit(X, Y)
 
     def fit(self, X, Y):
 
         assert X.ndim == 2
-        assert Y.ndim == 2
+        assert Y.ndim == 1
 
-        #assert Y.dtype == bool
+        assert len(X) == len(Y)
 
         Y = Y.reshape(Y.size, 1)
         Y_true = Y.ravel().astype(long)
         self.Y = Y
 
-        X = self.transform(X, with_fit=True)
-        X = X.reshape(-1, X.shape[-1]).astype('float32')
-
-        #Yv = Y.ravel()
-        #pos_mask = Yv > 0
-        #pos_idx = np.arange(len(Yv))[pos_mask]
-        #neg_idx = np.arange(len(Yv))[~pos_mask]
-
-        print X.shape
-
-        # -- initial variables
-        #W = np.ones((X.shape[1], 2), dtype='float32')
-        #W_size = W.size
-        #W_shape = W.shape
-        #b = np.zeros((2), dtype='float32')
-
-        ## -- theano program
-        #_X = T.fmatrix()
-        #_b = T.fvector()  # could be Theano shared variable
-        #_W = T.fmatrix()  # same
-        #_Y_true = T.lvector()
-        #_pos_idx = T.lvector()
-        #_neg_idx = T.lvector()
-
-        #_Y = T.dot(_X, _W) + _b
-        #_Y_pred = T.nnet.softmax(_Y)
-
-        #_loss = -T.mean(T.log(_Y_pred)[T.arange(_Y_true.shape[0]), _Y_true])
-        ##_loss_pos = -T.mean(T.log(_Y_pred[_pos_idx])[T.arange(_Y_true[_pos_idx].shape[0]), _Y_true[_pos_idx]])
-        ##_loss_neg = -T.mean(T.log(_Y_pred[_neg_idx])[T.arange(_Y_true[_neg_idx].shape[0]), _Y_true[_neg_idx]])
-        ##_loss = 1. * _loss_pos + 1e-1 * _loss_neg
-
-        #_dloss_W = T.grad(_loss, _W)
-        #_dloss_b = T.grad(_loss, _b)
-
-        #_f = theano.function([_X, _W, _b],
-                             #[_Y_pred],
-                             #allow_input_downcast=True)
-
-        #_f_df = theano.function([_X, _Y_true, _W, _b, _pos_idx, _neg_idx],
-                                #[_Y_pred, _loss, _dloss_W, _dloss_b],
-                                #allow_input_downcast=True)
-
         w = np.zeros(X.shape[1], dtype='float32')
-        #w = X[10]
         w_size = w.size
         b = np.zeros(1, dtype='float32')
 
         Y_true = 2. * Y_true - 1
 
         m = 0.2
-
-        def theano_pearson_normalize_vector(X):
-            Xm = X - X.mean()
-            Xmn = Xm / (tensor.sqrt(tensor.dot(Xm, Xm)) + 1e-3)
-            return Xmn
 
         # -- theano variables
         t_X = tensor.fmatrix()
@@ -218,17 +74,7 @@ class RPLogReg2(object):
         m_neg = 0
         t_loss = tensor.mean((t_yb * (tensor.maximum(0, 1 - t_M - m_pos) ** 2.)))
         t_loss += tensor.mean((1 - t_yb) * tensor.maximum(0, 1 - t_M - m_neg) ** 2.)
-        #t_loss = 1 - tensor.dot(
-            #theano_pearson_normalize_vector(t_y.flatten()),
-            #theano_pearson_normalize_vector(t_H.flatten())
-            #)
-        #from bangreadout.util import theano_corrcoef
-        #t_loss = 1 - theano_corrcoef(t_y.flatten(), t_H.flatten())
-        #t_loss = 1 - theano_pearson_normalize(t_y.ravel(), t_H.ravel())
 
-        #t_loss = tensor.mean(tensor.maximum(0, 1 - t_M - m) ** 2.)
-        ##t_loss = tensor.mean((1 - t_M) ** 2.)
-        #t_loss = tensor.mean(tensor.maximum(0, 1 - t_M - m))
         t_dloss_dw = tensor.grad(t_loss, t_w)
         t_dloss_db = tensor.grad(t_loss, t_b)
 
@@ -271,16 +117,16 @@ class RPLogReg2(object):
         return self
 
 
-    def predict(self, X):
-        X_shape = X.shape
-
-        X = self.transform(X)
-        X = X.reshape(-1, X.shape[-1])
+    def transform(self, X):
+        #X_shape = X.shape
 
         Y_pred = self._f(X, self.w, self.b)
-        Y_pred = Y_pred.reshape(X_shape[:2] + (-1,))
+        #Y_pred = Y_pred.reshape(X_shape[:2] + (-1,))
 
         return Y_pred
+
+    def predict(self, X):
+        return self.transform(X)
 
 
 def main():
@@ -354,129 +200,64 @@ def main():
     tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
 
     # --
-    mdl1 = RPLogReg2(rf_size=rf_size,
-                     lnorm_size=lnorm_size,
-                     n_filters=n_filters,
-                     lbfgs_params=lbfgs_params,
-                     learning=learning,
-                     #pca_n_components=pca_n_components,
-                    )
-    start = time.time()
+    #mdl1 = RPLogReg2(rf_size=rf_size,
+                     #lnorm_size=lnorm_size,
+                     #n_filters=n_filters,
+                     #lbfgs_params=lbfgs_params,
+                     #learning=learning,
+                     ##pca_n_components=pca_n_components,
+                    #)
+    #start = time.time()
     #trn_X -= trn_X.min()
     #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
-    from sthor.model import parameters
+    #from sthor.model import parameters
     from sthor.model import slm
-    from bangreadout import logistic
+    #from bangreadout import logistic
     from sthor import util
+    import parameters
 
     # XXXX: HERE XXXX
-    desc = parameters.fg11.fg11_ht_l3_1_description
+    desc = parameters.gusti1
     m = slm.SequentialLayeredModel(trn_X.shape, desc)
 
+    #if lnorm_size is not None:
+        #trn_X = filter_pad2d(np.atleast_3d(trn_X), lnorm_size)
+        #trn_X = np.dstack((
+            #lcdnorm3(trn_X, lnorm_size, contrast=False),
+        #))[..., 0]
+
+        #tst_X = filter_pad2d(np.atleast_3d(tst_X), lnorm_size)
+        #tst_X = np.dstack((
+            #lcdnorm3(tst_X, lnorm_size, contrast=False),
+        #))[..., 0]
+
     print 'pad'
-    #X = util.arraypad.pad(trn_X, (np.array(m.receptive_field_shape) // 2)[0], mode='symmetric')
-    #m = slm.SequentialLayeredModel(X.shape, desc)
+    X = trn_X
+    X = util.arraypad.pad(trn_X, (np.array(m.receptive_field_shape) // 2)[0], mode='symmetric')
+    m = slm.SequentialLayeredModel(X.shape, desc)
+    r = m.transform(X, interleave_stride=True, pad_apron=True)
+    r /= r.sum(2)[..., np.newaxis]
+    offset = (r.shape[0] - 512) / 2
+    r = r[offset:-offset, offset:-offset]
 
-    #print 'transform'
-    #r = m.transform(X, interleave_stride=True)
-    r = np.load('rtmp.npy')
+    #c = logistic.AverageLBFGSLogisticClassifier(r.shape[-1])
+    c = LogRegG()
+    a = r.reshape(-1, r.shape[-1])
+    b = (trn_Y>0).ravel()
+    #zmuv_rows_inplace(a.T)
+    c.partial_fit(a, b)
+    print 'trn pe', pearson(b.ravel(), c.transform(a).ravel())
 
-    c = logistic.AverageLBFGSLogisticClassifier(256)
-    #c.fit(r.reshape(-1, r.shape[-1]), (trn_Y>0).ravel())
-    a = r.reshape(-1, r.shape[-1])[::5]
-    b = (trn_Y>0).ravel()[::5]
-    c.fit(a, b)
-    raise
-
-    #pearson(trn_Y, gv)
-    #pearson(trn_Y.ravel(), gv.ravel())
-    #r.reshape(-1, 256)
-    #r.reshape(-1, 256).shape
-    #c.fit(r.reshape(-1, 256)[::100])
-    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2)))
-    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2))
-    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2)[::100])
-    #c.fit(r.reshape(-1, 256)[::10], (trn_Y>0).reshape(512**2)[::10])
-    #gv = c.transform(r.reshape(-1, 256))
-    #pearson(trn_Y.ravel(), gv.ravel())
-    #c.fit(r.reshape(-1, 256)[::5], (trn_Y>0).reshape(512**2)[::5])
-    #gv = c.transform(r.reshape(-1, 256)[1::5])
-    #pearson(trn_Y.ravel()[1::5], gv.ravel())
-    #[c.partial_fit(r.reshape(-1, 256)[i::10], (trn_Y>0).reshape(512**2)[i::10]) for i in xrange(10)]
-    #c = logistic.LBFGSLogisticClassifier(256)
-    #c.fit(r.reshape(-1, 256)[::100], (trn_Y>0).reshape(512**2)[::100])
-    #logistic.LBFGSLogisticClassifier(256)
-    #[logistic.LBFGSLogisticClassifier(256).fit(r.reshape(-1, 256)[i::10], (trn_Y>0).reshape(512**2)[i::10]) for i in xrange(10)]
+    X_tst_pad = util.arraypad.pad(
+        tst_X, (np.array(m.receptive_field_shape) // 2)[0], mode='symmetric')
+    X_tst_r = m.transform(X_tst_pad, interleave_stride=True, pad_apron=True)
+    X_tst_r /= X_tst_r.sum(2)[..., np.newaxis]
+    X_tst_r = X_tst_r[offset:-offset, offset:-offset]
+    a = X_tst_r.reshape(-1, r.shape[-1])
+    b = (tst_Y>0).ravel()
+    print 'tst pe', pearson(b.ravel(), c.transform(a).ravel())
 
     import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-    print 'model...'
-    from skimage.filter import median_filter
-    #trn_X = median_filter(trn_X)
-    mdl1.fit(trn_X, trn_Y)
-    #trn_X1 = mdl1.predict(trn_X)[..., 0]
-
-    if 0:
-        fs = 11
-        from bangreadout import LBFGSLogisticClassifier
-        val_Y_pred = mdl1.predict(val_X)
-        val_Y_pred = np.dstack((val_X[..., np.newaxis], val_Y_pred))
-        val_Y_pred_rv = view_as_windows(filter_pad2d(val_Y_pred, (fs, fs)), (fs, fs, 1))
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-        val_Y_pred = val_Y_pred_rv.reshape(np.prod(val_Y_pred.shape[:2]), -1)
-        n_ff = val_Y_pred.shape[-1]
-
-        logreg = LBFGSLogisticClassifier(n_features=val_Y_pred.shape[-1])
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-
-        zmuv_rows_inplace(val_Y_pred.T)
-        logreg.fit(val_Y_pred, val_Y.ravel()>0)
-
-        Y_pred1 = mdl1.predict(tst_X)
-        #zmuv_rows_inplace(Y_pred1.T)
-        Y_pred1 = np.dstack((tst_X[..., np.newaxis], Y_pred1))
-        Y_pred2 = view_as_windows(filter_pad2d(Y_pred1, (fs, fs)), (fs, fs, 1)).reshape(-1, n_ff)
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-        zmuv_rows_inplace(Y_pred2.T)
-        Y_pred2 = logreg.transform(Y_pred2).reshape(512, 512)
-        Y_pred = Y_pred2
-    else:
-        Y_pred = mdl1.predict(tst_X)[..., 0]
-        Y_pred = median_filter(Y_pred, radius=3)
-
-    #trn_X1 = mdl1.predict(trn_X)[..., 0]
-
-    #mdl2 = RPLogReg1(rf_size=rf_size,
-                     #lnorm_size=lnorm_size,
-                     #n_filters=n_filters)
-    #mdl2 = RPLogReg1(rf_size=rf_size,
-                     #lnorm_size=lnorm_size,
-                     #n_filters=n_filters)
-    #mdl2.fit(trn_X1, trn_Y.astype(bool))
-
-    #Y_pred = mdl2.predict(mdl1.predict(tst_X)[..., 0])
-    #print 'pca...'
-    #tst_X = pca.transform(tst_X)
-    #Y_pred = mdl1.predict(tst_X)[..., 0]
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-    #Y_pred = Y_pred + (tst_X * tst_X <= 0.1)
-    Y_true = tst_Y.copy()
-    print 'pe =', pearson(Y_true.ravel(), Y_pred.ravel())
-    end = time.time()
-
-    print end-start
-
-    from skimage import io
-    io.use_plugin('freeimage')
-    Y_pred -= Y_pred.min()
-    Y_pred /= Y_pred.max()
-    offset = 32
-    Y_pred = Y_pred[offset:-offset, offset:-offset]
-    Y_true = Y_true[offset:-offset, offset:-offset]
-    print Y_pred.shape
-    io.imsave('Y_pred.tif', Y_pred, plugin='freeimage')
-    io.imsave('Y_true.tif', Y_true, plugin='freeimage')
-
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
 
 if __name__ == '__main__':
     main()
