@@ -265,8 +265,8 @@ class SharpMind(object):
 
         def minimize_me(params):
 
-            stdout.write('.')
-            stdout.flush()
+            #stdout.write('.')
+            #stdout.flush()
 
             # unpack parameters
             fb_l, W = unpack_params(params)
@@ -283,13 +283,20 @@ class SharpMind(object):
             if self._n_iterations == 100:
                 grads[:] = 0
 
-            if self._n_iterations > 0: 
+            #if self._n_iterations > 0: 
+            print '#iterations:', self._n_iterations
+            try:
+                trn_pe = pearson(self.transform_Y(self.trn_Y).ravel(),
+                                 self.transform(self.trn_X).ravel())
+                print 'trn_pe:', trn_pe
                 tst_pe = pearson(self.transform_Y(self.tst_Y).ravel(),
                                  self.transform(self.tst_X).ravel())
-                print 'tst_pe', tst_pe
-            self._n_iterations += 1
+                print 'tst_pe:', tst_pe
+            except AssertionError:
+                pass
             print 'elapsed:', time.time() - self.time_start
 
+            self._n_iterations += 1
             # fmin_l_bfgs_b needs double precision...
             return loss.astype('float64'), grads.astype('float64')
 
@@ -312,9 +319,11 @@ def main():
     #pad = m.footprint
     #print pad
 
-    #trn_X = arraypad.pad(trn_X, 512, mode='symmetric')
-    #trn_Y = arraypad.pad(trn_Y, 512, mode='symmetric')
+    trn_X = arraypad.pad(trn_X, 128, mode='symmetric')
+    trn_Y = arraypad.pad(trn_Y, 128, mode='symmetric')
 
+    m.trn_Y = trn_Y
+    m.trn_X = trn_X
     m.tst_Y = tst_Y
     m.tst_X = tst_X
     m.partial_fit(trn_X, trn_Y)
