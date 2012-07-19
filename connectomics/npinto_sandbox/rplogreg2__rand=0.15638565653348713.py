@@ -381,7 +381,7 @@ def main():
     print 'model...'
     from skimage.filter import median_filter
 
-    import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
     #trn_X = median_filter(trn_X)
     mdl1.fit(trn_X, trn_Y)
     #trn_X1 = mdl1.predict(trn_X)[..., 0]
