@@ -4,3 +4,9 @@
 [submodule "connectomics/external/sthor"]
 	path = connectomics/external/sthor
 	url = git@github.com:nsf-ri-ubicv/sthor.git
+[submodule "connectomics/external/bangmetric"]
+	path = connectomics/external/bangmetric
+	url = git://github.com/npinto/bangmetric.git
+[submodule "connectomics/external/bangreadout"]
+	path = connectomics/external/bangreadout
+	url = git://github.com/npinto/bangreadout.git

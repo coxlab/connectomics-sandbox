@@ -16,11 +16,15 @@ from bangmetric import *
 #l = (misc.lena() / 1.).astype('f')
 
 
-desc = [
-    (4, 5, 2),
-    (8, 5, 2),
+convnet_desc = [
     (16, 5, 2),
+    (16, 5, 2),
+    #(16, 5, 2),
 ]
+
+#mlp_desc = [
+    #200,
+#]
 
 DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
@@ -31,19 +35,19 @@ DEFAULT_LBFGS_PARAMS = dict(
 
 class SharpMind(object):
 
-    def __init__(self, description):
+    def __init__(self, convnet_desc):
 
         # -- model description
-        for i, (nf, fsize, psize) in enumerate(desc):
+        for i, (nf, fsize, psize) in enumerate(convnet_desc):
             print(">>> Layer %d: fsize=%d, psize=%d"
                   % ((i + 1), fsize, psize))
             assert fsize % 1 == 0, fsize
             assert psize % 2 == 0, psize
-        self.description = description
+        self.convnet_desc = convnet_desc
 
         # -- footprint / padding
         footprint = 1
-        for _, fsize, psize in desc[::-1]:
+        for _, fsize, psize in convnet_desc[::-1]:
             footprint *= psize
             footprint += fsize - 1
         assert footprint > 0, footprint
@@ -56,7 +60,7 @@ class SharpMind(object):
         Y = Y.reshape((1, 1) + Y.shape)
 
         output_shape = Y.shape
-        for i, (nf, fsize, psize) in enumerate(desc):
+        for i, (nf, fsize, psize) in enumerate(self.convnet_desc):
             input_shape = output_shape
 
             # hack to get the output_shape
@@ -124,7 +128,7 @@ class SharpMind(object):
         # -- ConvNet
         output_shape = X.shape
         t_output = t_X
-        for i, (nf, fsize, psize) in enumerate(desc):
+        for i, (nf, fsize, psize) in enumerate(self.convnet_desc):
             input_shape = output_shape
             fb = np.random.randn(nf, input_shape[1], fsize, fsize).astype('f')
 
@@ -282,17 +286,20 @@ def main():
     tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
 
 
-    m = SharpMind(desc)
+    m = SharpMind(convnet_desc)
     #pad = m.footprint
     #print pad
 
-    trn_X = arraypad.pad(trn_X, 512, mode='symmetric')
-    trn_Y = arraypad.pad(trn_Y, 512, mode='symmetric')
+    #trn_X = arraypad.pad(trn_X, 512, mode='symmetric')
+    #trn_Y = arraypad.pad(trn_Y, 512, mode='symmetric')
 
     #l = np.random.randn(pad+2, pad+2).astype('f')
     m.partial_fit(trn_X, trn_Y)
     trn_Y = m.transform_Y(trn_Y)
     import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+
+    tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
+    print 'tst_pe', tst_pe
 
     #m.transform(trn_X)
 
