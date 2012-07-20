@@ -21,8 +21,8 @@ from bangmetric import *
 
 
 convnet_desc = [
-    (4, 5, 2),
-    (4, 5, 2),
+    (8, 5, 2),
+    (8, 5, 2),
     #(4, 5, 2),
     #(4, 5, 2),
     #(8, 5, 2),
@@ -34,9 +34,9 @@ convnet_desc = [
 
 DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
-    factr=1e7,#12,
+    factr=1e5,#7,#12,
     maxfun=1e4,
-    m=1000,#,#00,
+    m=100,
     )
 
 
@@ -288,6 +288,7 @@ class SharpMind(object):
 
             return fb_l, W
 
+        #ciw = self.ciw
         def minimize_me(params):
 
             stdout.write('.')
@@ -304,9 +305,29 @@ class SharpMind(object):
             grads = out[1:]
 
             # pack parameters
+            #ll = []
+            #for gi, g in enumerate(grads):
+                #if gi in ci:
+                    #ll += [g.ravel()]
+                #else:
+                    #ll += [np.zeros_like(g.ravel())]
+            #ll = []
+            #for g, w in zip(grads, ciw):
+                ##ll += [w*g.ravel()]
+                #g = g.ravel()
+                #gn = np.linalg.norm(g)
+                #if gn != 0:
+                    #g /= gn
+                #ll += [w*g]
+            #grads = np.concatenate(ll)
             grads = np.concatenate([g.ravel() for g in grads])
-            if self._n_calls >= 200:
+            if self._n_calls == 100:
                 grads[:] = 0
+            #ridx = np.random.randn(len(grads)) > 0.1
+            #print 'norm', np.linalg.norm(grads)
+            #print ridx.sum()
+            #grads[ridx] = 0
+            #grads[ridx] = np.random.randn(*grads[ridx].shape).astype('f')
 
             if self._n_calls % 10 == 0:
                 print
@@ -333,7 +354,32 @@ class SharpMind(object):
         # pack parameters
         lbfgs_params = DEFAULT_LBFGS_PARAMS
         params = np.concatenate([fb.ravel() for fb in fb_l] + [W.ravel()])
-        best, bestval, info = fmin_l_bfgs_b(minimize_me, params, **lbfgs_params)
+        #best, bestval, info = fmin_l_bfgs_b(minimize_me, params, **lbfgs_params)
+        lr = 1e-4
+        #ssa = 1. / (i + 1)
+        #xa = (1 - ssa) * xa + ssa * x
+        EPSILON = 1e-6
+        Xorig = X.copy()
+        footprint = self.footprint
+        rng = np.random.RandomState(42)
+        print footprint
+        print len(Xorig)
+        while True:
+            j, i = rng.randint(0, Xorig.shape[-1]-footprint, size=2)
+            X = Xorig[j:j+footprint, i:i+footprint]
+            print X.shape
+            try:
+                l, g = minimize_me(params)
+                params -= lr * g
+                th = max(abs(gradients) / abs(x)) 
+                if th > 0.05:
+                    lr *= 1.05
+                else:
+                    lr *= 0.95
+                if (abs(gradients) < EPSILON).all():
+                    break
+            except KeyboardInterrupt:
+                pass
 
         best_fb_l, best_W = unpack_params(best)
         self.fb_l = best_fb_l
@@ -350,15 +396,15 @@ def main():
     #pad = m.footprint
     #print pad
 
-    trn_X_pad = arraypad.pad(trn_X, 512, mode='symmetric')
-    trn_Y_pad = arraypad.pad(trn_Y, 512, mode='symmetric')
-    tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
-    tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
-
-    trn_X = trn_X_pad
-    trn_Y = trn_Y_pad
-    tst_X = tst_X_pad
-    tst_Y = tst_Y_pad
+    #trn_X_pad = arraypad.pad(trn_X, 512, mode='symmetric')
+    #trn_Y_pad = arraypad.pad(trn_Y, 512, mode='symmetric')
+    #tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
+    #tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
+#
+    #trn_X = trn_X_pad
+    #trn_Y = trn_Y_pad
+    #tst_X = tst_X_pad
+    #tst_Y = tst_Y_pad
     m.trn_Y = trn_Y
     m.trn_X = trn_X
     m.tst_Y = tst_Y
@@ -367,7 +413,14 @@ def main():
     print 'trn final shape:', m.transform_Y(trn_Y).shape
     print 'tst final shape:', m.transform_Y(tst_Y).shape
     print '*' * 80
+    #m.ciw = [4, 2, 1]
     m.partial_fit(trn_X, trn_Y)
+    #m.ci = [0]
+    #m.partial_fit(trn_X, trn_Y)
+    #m.ci = [1]
+    #m.partial_fit(trn_X, trn_Y)
+    #m.ci = [2]
+    #m.partial_fit(trn_X, trn_Y)
 
     tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
     print 'tst_pe', tst_pe
@@ -383,14 +436,15 @@ def main():
     #tst_Y = arraypad.pad(tst_Y, 512, mode='symmetric')
     from scipy import ndimage
 
-    SIZE = 512#4. * m.footprint
+    SIZE = 256#4. * m.footprint
     N_BAGS = 16
 
     rng = np.random.RandomState(42)
     fb_l = None
     W = None
+    lr = 0.02
     for b in xrange(N_BAGS):
-        SIZE = (b + 1) * SIZE
+        #SIZE = (b + 1) * SIZE
         if b > 0:
             trn_X_pad = ndimage.rotate(trn_X_pad, 90)
             trn_Y_pad = ndimage.rotate(trn_Y_pad, 90)
@@ -408,12 +462,12 @@ def main():
             fb_l = m.fb_l
             W = m.W
         else:
-            lr = 1. / (b + 1)
+            #lr = 1. / (b + 1)
             fb_l = [lr * fb_l[i] + (1 - lr) * m.fb_l[i] for i in xrange(len(fb_l))]
             W = lr * m.W + (1 - lr) * W
 
-    m.fb_l = fb_l
-    m.W = W
+        m.fb_l = fb_l
+        m.W = W
 
     trn_Y = m.transform_Y(trn_Y)
     print trn_Y.shape
