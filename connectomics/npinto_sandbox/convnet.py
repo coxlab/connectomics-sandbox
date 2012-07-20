@@ -36,7 +36,7 @@ DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
     factr=1e7,#12,
     maxfun=1e4,
-    m=1,#00,
+    m=1000,#,#00,
     )
 
 
