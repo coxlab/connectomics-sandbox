@@ -488,7 +488,7 @@ def main():
     W = None
     lr_min = 1e-1#2# = 0.1#2#1e-2#1#1e-3#1#1e-2
     for bag in xrange(N_BAGS):
-        #m = SharpMind(convnet_desc)
+        m = SharpMind(convnet_desc)
         #SIZE = (b + 1) * SIZE
         if bag > 0:
             trn_X_pad = ndimage.rotate(trn_X_pad, 90, prefilter=False, order=0)
@@ -568,8 +568,8 @@ def main():
             m.fb_l = fb_l_bak
             m.W = W_bak
 
-        if tst_pe > 0.738:
-            raise
+        #if tst_pe > 0.738:
+            #raise
 
     #trn_Y = m.transform_Y(trn_Y)
     #tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
