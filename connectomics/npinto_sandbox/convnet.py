@@ -359,15 +359,15 @@ class SharpMind(object):
         #ssa = 1. / (i + 1)
         #xa = (1 - ssa) * xa + ssa * x
         EPSILON = 1e-6
-        Xorig = X.copy()
-        footprint = self.footprint
-        rng = np.random.RandomState(42)
-        print footprint
-        print len(Xorig)
+        #Xorig = X.copy()
+        #footprint = self.footprint
+        #rng = np.random.RandomState(42)
+        #print footprint
+        #print len(Xorig)
         while True:
-            j, i = rng.randint(0, Xorig.shape[-1]-footprint, size=2)
-            X = Xorig[j:j+footprint, i:i+footprint]
-            print X.shape
+            #j, i = rng.randint(0, Xorig.shape[-1]-footprint, size=2)
+            #X = Xorig[j:j+footprint, i:i+footprint]
+            #print X.shape
             try:
                 l, g = minimize_me(params)
                 params -= lr * g
