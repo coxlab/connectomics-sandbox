@@ -21,9 +21,11 @@ from bangmetric import *
 
 
 convnet_desc = [
-    (16, 5, 2),
-    (16, 5, 2),
-    (16, 5, 2),
+    (4, 5, 2),
+    (4, 5, 2),
+    #(4, 5, 2),
+    #(4, 5, 2),
+    #(8, 5, 2),
 ]
 
 #mlp_desc = [
@@ -32,8 +34,9 @@ convnet_desc = [
 
 DEFAULT_LBFGS_PARAMS = dict(
     iprint=1,
-    factr=1e7,
+    factr=1e7,#12,
     maxfun=1e4,
+    m=100,
     )
 
 
@@ -112,6 +115,8 @@ class SharpMind(object):
         self.footprint = footprint
         print ">>> Footprint: %d" % footprint
 
+        self.fb_l = None
+        self.W = None
 
     def transform_Y(self, Y):
 
@@ -174,7 +179,10 @@ class SharpMind(object):
         t_Y_true = tensor.ftensor4()
         t_W = tensor.fvector()
 
-        fb_l = []
+        if self.fb_l is None:
+            fb_l = []
+        else:
+            fb_l = self.fb_l
 
         t_input_l = []
         input_l = []
@@ -188,10 +196,15 @@ class SharpMind(object):
         t_output = t_X
         for i, (nf, fsize, psize) in enumerate(self.convnet_desc):
             input_shape = output_shape
-            #fb = np.random.uniform(size=(nf, input_shape[1], fsize, fsize)).astype('f')
-            fb = np.random.randn(nf, input_shape[1], fsize, fsize).astype('f')
-            fb -= fb.mean()
-            fb /= np.linalg.norm(fb.ravel())
+            if self.fb_l is None:
+                np.random.seed(42)
+                #fb = np.random.uniform(size=(nf, input_shape[1], fsize, fsize)).astype('f')
+                #fb_shape = (nf, input_shape[1], fsize, fsize)
+                #fb = np.ones(fb_shape, dtype='f')
+                fb = np.random.randn(nf, input_shape[1], fsize, fsize).astype('f')
+                fb -= fb.mean()
+                fb /= np.linalg.norm(fb.ravel())
+                fb_l += [fb]
 
             t_input = t_output
             t_fb = tensor.ftensor4()
@@ -214,7 +227,6 @@ class SharpMind(object):
 
             input_l += [input]
             t_input_l += [t_input]
-            fb_l += [fb]
             t_fb_l += [t_fb]
             t_f_l += [t_f]
             t_p_l += [t_p]
@@ -223,11 +235,15 @@ class SharpMind(object):
         # -- MLP
         W_size = fb_l[-1].shape[0]
         t_Y_pred = tensor.tanh(tensor.tensordot(t_output, t_W, axes=[(1,), (0,)]))
+        t_Y_pred = (1. + t_Y_pred) * 2
 
-        t_loss = ((t_Y_pred - t_Y_true[:, 0, :, :]) ** 2.).mean()
-        #epsilon = 0.5
+        #t_Y_true = t_Y_true[:, 0, :, :]
+        #t_Y_true = 2. * (t_Y_true > 0.) - 1
+        #t_loss = ((t_Y_pred - t_Y_true[:, 0, :, :]) ** 2.).mean()
+        epsilon = 0.1
         #t_Y_true = 2. * (t_Y_true > 0.) - 1
         #t_loss = (tensor.maximum(0, 1 - t_Y_pred*t_Y_true[:, 0, :, :] - epsilon) ** 2.).mean()
+        t_loss = (tensor.maximum(0, (t_Y_pred - t_Y_true[:, 0, :, :]) ** 2 - epsilon) ** 2.).mean()
 
         t_dloss_dfb_l = [tensor.grad(t_loss, t_fb) for t_fb in t_fb_l]
         t_dloss_dW = tensor.grad(t_loss, t_W)
@@ -241,8 +257,12 @@ class SharpMind(object):
             )
         self.df = df
 
+        #W = np.zeros((W_size), dtype='float32')
         #W = np.random.randn(W_size).astype('f')
-        W = np.zeros((W_size), dtype='float32')
+        if self.W is None:
+            W = np.zeros((W_size), dtype='float32')
+        else:
+            W = self.W
 
         #r = f(*([X] + fb_l + [W]))
         #g = df(*([X] + fb_l + [W, Y_true]))
@@ -250,7 +270,7 @@ class SharpMind(object):
 
         self.fb_l = fb_l
         self.W = W
-        self._n_iterations = 0
+        self._n_calls = 0
 
         self.time_start = time.time()
 
@@ -270,8 +290,8 @@ class SharpMind(object):
 
         def minimize_me(params):
 
-            #stdout.write('.')
-            #stdout.flush()
+            stdout.write('.')
+            stdout.flush()
 
             # unpack parameters
             fb_l, W = unpack_params(params)
@@ -285,23 +305,28 @@ class SharpMind(object):
 
             # pack parameters
             grads = np.concatenate([g.ravel() for g in grads])
-            if self._n_iterations == 100:
+            if self._n_calls >= 200:
                 grads[:] = 0
 
-            #if self._n_iterations > 0: 
-            print '#iterations:', self._n_iterations
-            try:
-                trn_pe = pearson(self.transform_Y(self.trn_Y).ravel(),
-                                 self.transform(self.trn_X).ravel())
-                print 'trn_pe:', trn_pe
-                tst_pe = pearson(self.transform_Y(self.tst_Y).ravel(),
-                                 self.transform(self.tst_X).ravel())
-                print 'tst_pe:', tst_pe
-            except AssertionError:
-                pass
-            print 'elapsed:', time.time() - self.time_start
+            if self._n_calls % 10 == 0:
+                print
+                print '#calls:', self._n_calls
+                try:
+                    trn_pe = pearson(self.transform_Y(self.trn_Y).ravel(),
+                                     self.transform(self.trn_X).ravel())
+                    print 'trn_pe:', trn_pe
+                    tst_pe = pearson(self.transform_Y(self.tst_Y).ravel(),
+                                     self.transform(self.tst_X).ravel())
+                    print 'tst_pe:', tst_pe
+                    ratio = tst_pe / trn_pe
+                    print 'ratio:', ratio
+                    #if ratio < 0.8:#9:
+                        #grads[:] = 0
+                except AssertionError:
+                    pass
+                print 'elapsed:', time.time() - self.time_start
 
-            self._n_iterations += 1
+            self._n_calls += 1
             # fmin_l_bfgs_b needs double precision...
             return loss.astype('float64'), grads.astype('float64')
 
@@ -316,6 +341,7 @@ class SharpMind(object):
 
         return self
 
+
 def main():
 
     trn_X, trn_Y, tst_X, tst_Y = get_X_Y()
@@ -324,18 +350,79 @@ def main():
     #pad = m.footprint
     #print pad
 
-    trn_X = arraypad.pad(trn_X, 128, mode='symmetric')
-    trn_Y = arraypad.pad(trn_Y, 128, mode='symmetric')
+    trn_X_pad = arraypad.pad(trn_X, 512, mode='symmetric')
+    trn_Y_pad = arraypad.pad(trn_Y, 512, mode='symmetric')
+    tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
+    tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
 
+    trn_X = trn_X_pad
+    trn_Y = trn_Y_pad
+    tst_X = tst_X_pad
+    tst_Y = tst_Y_pad
     m.trn_Y = trn_Y
     m.trn_X = trn_X
     m.tst_Y = tst_Y
     m.tst_X = tst_X
+    print '*' * 80
+    print 'trn final shape:', m.transform_Y(trn_Y).shape
+    print 'tst final shape:', m.transform_Y(tst_Y).shape
+    print '*' * 80
     m.partial_fit(trn_X, trn_Y)
-    trn_Y = m.transform_Y(trn_Y)
 
     tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
     print 'tst_pe', tst_pe
+
+
+    raise
+
+    trn_X_pad = arraypad.pad(trn_X, 512, mode='symmetric')
+    trn_Y_pad = arraypad.pad(trn_Y, 512, mode='symmetric')
+    #misc.imsave('trn_X_pad.png', trn_X_pad)
+    #misc.imsave('trn_Y_pad.png', trn_Y_pad)
+    #tst_X = arraypad.pad(tst_X, 512, mode='symmetric')
+    #tst_Y = arraypad.pad(tst_Y, 512, mode='symmetric')
+    from scipy import ndimage
+
+    SIZE = 512#4. * m.footprint
+    N_BAGS = 16
+
+    rng = np.random.RandomState(42)
+    fb_l = None
+    W = None
+    for b in xrange(N_BAGS):
+        SIZE = (b + 1) * SIZE
+        if b > 0:
+            trn_X_pad = ndimage.rotate(trn_X_pad, 90)
+            trn_Y_pad = ndimage.rotate(trn_Y_pad, 90)
+
+        j, i = rng.randint(0, len(trn_X_pad)-512, size=2)
+        print j, i
+        trn_X = trn_X_pad[j:j+SIZE, i:i+SIZE].copy()
+        trn_Y = trn_Y_pad[j:j+SIZE, i:i+SIZE].copy()
+        m.trn_Y = trn_Y
+        m.trn_X = trn_X
+        m.tst_Y = tst_Y
+        m.tst_X = tst_X
+        m.partial_fit(trn_X, trn_Y)
+        if fb_l is None:
+            fb_l = m.fb_l
+            W = m.W
+        else:
+            lr = 1. / (b + 1)
+            fb_l = [lr * fb_l[i] + (1 - lr) * m.fb_l[i] for i in xrange(len(fb_l))]
+            W = lr * m.W + (1 - lr) * W
+
+    m.fb_l = fb_l
+    m.W = W
+
+    trn_Y = m.transform_Y(trn_Y)
+    print trn_Y.shape
+    tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
+    print 'tst_pe', tst_pe
+
+    #trn_Y = m.transform_Y(trn_Y)
+    #tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
+    #print 'tst_pe', tst_pe
 
 
 if __name__ == '__main__':
