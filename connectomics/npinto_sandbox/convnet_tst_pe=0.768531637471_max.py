@@ -16,21 +16,19 @@ import time
 from os import path, environ
 from scipy import ndimage
 from skimage.filter import median_filter
-from random_connectomics import *
 
 HOME = environ.get("HOME")
 
 from bangmetric import *
 
 #l = (misc.lena() / 1.).astype('f')
-print theano.config.openmp
 
 from xform import water
 
 convnet_desc = [
-    (32, 5, 2),
-    (32, 5, 2),
-    (32, 5, 2),
+    (16, 5, 2),
+    (16, 5, 2),
+    (16, 5, 2),
     #(16, 5, 2),
     #(48, 3, 2),
     #(2, 5, 2),
@@ -231,12 +229,7 @@ class SharpMind(object):
             #t_f = tensor.tanh(nnet.conv2d(t_input, t_fb))
             #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb) ** 2.)
             #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb)) ** 2.
-            #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb))
-            #t_f = tensor.minimum(1, t_f)
-            t_f = nnet.conv2d(t_input, t_fb)
-            #t_f = tensor.tanh(t_f)
-            t_f = tensor.maximum(t_f, 0)
-            #t_f = tensor.clip(t_f, 0, 1)
+            t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb))
             t_p = downsample.max_pool_2d(t_f, (psize, psize))
             t_output = t_p
 
@@ -500,7 +493,7 @@ def main():
     tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
 
     SIZE = 512#*2#*2#3*512-1#1024
-    N_BAGS = 10000
+    N_BAGS = 1000
     FOLLOW_AVG = 10#True#False
     #DECAY = 1e-3
 
@@ -547,6 +540,7 @@ def main():
             #bal = 1. * pos.sum() / pos.size
             ##print abs(1 - bal / bal_th), bal_tol
         #print 'bal:', bal, j, i
+        from random_connectomics import *
         trn_X = ndimage.rotate(trn_X_orig, bag * 90, prefilter=False, order=0)
         trn_Y = ndimage.rotate(trn_Y_orig, bag * 90, prefilter=False, order=0)
         trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
