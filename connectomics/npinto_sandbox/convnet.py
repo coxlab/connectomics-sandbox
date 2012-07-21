@@ -17,6 +17,8 @@ from os import path, environ
 from scipy import ndimage
 from skimage.filter import median_filter
 from random_connectomics import *
+from connectomics_noise import *
+from connectomics_swirls import *
 
 HOME = environ.get("HOME")
 
@@ -28,9 +30,9 @@ print theano.config.openmp
 from xform import water
 
 convnet_desc = [
-    (32, 5, 2),
-    (32, 5, 2),
-    (32, 5, 2),
+    (16, 5, 2),
+    (16, 5, 2),
+    (16, 5, 2),
     #(16, 5, 2),
     #(48, 3, 2),
     #(2, 5, 2),
@@ -166,6 +168,9 @@ class SharpMind(object):
         assert X.ndim == 2
         assert X.dtype == 'float32'
 
+        X -= X.mean()
+        X /= X.std()
+
         # -- reshape to fit theano's convention
         #print '>>> X.shape:', X.shape
         X = X.reshape((1, 1) + X.shape)
@@ -181,6 +186,9 @@ class SharpMind(object):
 
         assert X.ndim == 2
         assert X.dtype == 'float32'
+
+        X -= X.mean()
+        X /= X.std()
 
         assert Y_true.ndim == 2
         assert Y_true.dtype == 'float32'
@@ -228,12 +236,10 @@ class SharpMind(object):
 
             t_input = t_output
             t_fb = tensor.ftensor4()
-            #t_f = tensor.tanh(nnet.conv2d(t_input, t_fb))
-            #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb) ** 2.)
-            #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb)) ** 2.
-            #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb))
-            #t_f = tensor.minimum(1, t_f)
-            t_f = nnet.conv2d(t_input, t_fb)
+            t_f = nnet.conv2d(t_input, t_fb,
+                              #image_shape=input_shape,
+                              filter_shape=fb.shape
+                             )
             #t_f = tensor.tanh(t_f)
             t_f = tensor.maximum(t_f, 0)
             #t_f = tensor.clip(t_f, 0, 1)
@@ -510,7 +516,7 @@ def main():
     fb_l = None
     W = None
     lr_min = 0.01#05#1#01#05#5e-2
-    eta0 = 1#.5#1#0.1
+    eta0 = 1#.2#0.8#1#.5#1#0.1
     #gaussian_sigma = 1#0.5
     for bag in xrange(N_BAGS):
         print "BAGGING ITERATION", (bag + 1)
@@ -547,13 +553,41 @@ def main():
             #bal = 1. * pos.sum() / pos.size
             ##print abs(1 - bal / bal_th), bal_tol
         #print 'bal:', bal, j, i
-        trn_X = ndimage.rotate(trn_X_orig, bag * 90, prefilter=False, order=0)
-        trn_Y = ndimage.rotate(trn_Y_orig, bag * 90, prefilter=False, order=0)
-        trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
+        trn_X = trn_X_orig.copy()
+        trn_Y = trn_Y_orig.copy()
 
-        gaussian_sigma = np.random.uniform(0, 1)
-        print 'gaussian_sigma:', gaussian_sigma
-        trn_X = ndimage.gaussian_filter(trn_X, gaussian_sigma)
+        if rng.binomial(1, .5):
+            print 'flip h...'
+            trn_X = trn_X[:, ::-1]
+            trn_Y = trn_Y[:, ::-1]
+
+        if rng.binomial(1, .5):
+            print 'flip v...'
+            trn_X = trn_X[::-1, :]
+            trn_Y = trn_Y[::-1, :]
+
+        if rng.binomial(1, .5):
+            print 'rotate...'
+            trn_X = ndimage.rotate(trn_X, bag * 90, prefilter=False, order=0)
+            trn_Y = ndimage.rotate(trn_Y, bag * 90, prefilter=False, order=0)
+
+        if rng.binomial(1, .5):
+            print 'swirls...'
+            trn_X, trn_Y = random_swirls(trn_X, trn_Y, rseed=bag)
+
+        if rng.binomial(1, .5):
+            print 'random xform...'
+            trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
+
+        if rng.binomial(1, .5):
+            print 'exp noise...'
+            trn_X = add_noise_experimental(trn_X)
+
+        print trn_X.min(), trn_X.max()
+
+        #gaussian_sigma = rng.uniform(0, .5)
+        #print 'gaussian_sigma:', gaussian_sigma
+        #trn_X = ndimage.gaussian_filter(trn_X, gaussian_sigma)
 
         m.trn_Y = trn_Y
         m.trn_X = trn_X
