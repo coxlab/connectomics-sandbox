@@ -16,6 +16,7 @@ import time
 from os import path, environ
 from scipy import ndimage
 from skimage.filter import median_filter
+from random_connectomics import *
 
 HOME = environ.get("HOME")
 
@@ -546,7 +547,6 @@ def main():
             #bal = 1. * pos.sum() / pos.size
             ##print abs(1 - bal / bal_th), bal_tol
         #print 'bal:', bal, j, i
-        from random_connectomics import *
         trn_X = ndimage.rotate(trn_X_orig, bag * 90, prefilter=False, order=0)
         trn_Y = ndimage.rotate(trn_Y_orig, bag * 90, prefilter=False, order=0)
         trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
