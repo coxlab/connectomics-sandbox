@@ -33,7 +33,7 @@ def random_swirls(X, Y, n_swirls=1, order=0, rseed=None):
         Y2 = swirl(Y2, rotation=0, mode='mirror', order=order,
                     center=center, strength=strength, radius=radius)
 
-    X2 = X2.astype(X2.dtype)
+    X2 = X2.astype(X.dtype)
     Y2 = (Y2 > 0.5).astype(Y.dtype)
 
     return X2, Y2
