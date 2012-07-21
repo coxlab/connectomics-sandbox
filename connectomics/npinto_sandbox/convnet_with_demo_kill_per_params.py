@@ -10,7 +10,6 @@ import theano
 from theano import tensor
 from sthor.util import arraypad
 from skimage.util import view_as_windows
-from skimage.util import view_as_blocks
 import time
 
 from os import path, environ
@@ -148,13 +147,6 @@ class SharpMind(object):
             fsize2 = fsize // 2
             Y = Y[:, :, fsize2:-fsize2, fsize2:-fsize2]
             Y = Y[:, :, ::psize, ::psize]
-            #Y = arraypad.pad(Y[0, 0], (psize // 2, int(round(psize / 2.) - 1)), mode='constant')
-            #Y = view_as_windows(Y, (psize, psize))
-            #Y = Y.reshape(Y.shape[:2] + (-1,))
-            #Y = Y.min(-1)
-            #Y = Y[::psize, ::psize]
-            #Y = Y.reshape((1, 1) + Y.shape)
-            #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
             assert Y.shape[2:] == output_shape[2:], (Y.shape, output_shape)
 
         return Y[0, 0]
@@ -216,7 +208,12 @@ class SharpMind(object):
             input_shape = output_shape
             if self.fb_l is None:
                 np.random.seed(42)
-                #fb = np.random.uniform(size=(nf, input_shape[1], fsize, fsize)).astype('f')
+                #fb_size = nf * input_shape[1] * fsize * fsize
+                #fb = np.random.uniform(
+                    #-np.sqrt(6. / fb_size),
+                    #+np.sqrt(6. / fb_size),
+                    #size=(nf, input_shape[1], fsize, fsize)
+                    #).astype('f')
                 #fb_shape = (nf, input_shape[1], fsize, fsize)
                 #fb = np.ones(fb_shape, dtype='f')
                 fb = np.random.randn(nf, input_shape[1], fsize, fsize).astype('f')
@@ -294,6 +291,11 @@ class SharpMind(object):
 
         if self.W is None:
             W = np.zeros((W_size + 1), dtype='float32')
+            #W = np.random.uniform(
+                #-np.sqrt(6. / fb_size),
+                #+np.sqrt(6. / fb_size),
+                #size=(W_size + 1)
+                #).astype('f')
         else:
             W = self.W / np.linalg.norm(self.W)
 
@@ -354,9 +356,24 @@ class SharpMind(object):
             # pack parameters
             grad_norms = [np.linalg.norm(g.ravel()) for g in grads]
             grads = np.concatenate([g.ravel() for g in grads])
-            th_norm = 2#1.5
-            if (np.array(fb_norms) > th_norm).any() or W_norm > th_norm:
+            th_norm = 2
+            #if W_norm > th_norm:
+                ##print W_norm
+                ##print 'killing W!' * 80
+                #grads[-len(W):] = 0
+
+            #offset = 0
+            #for fb, fb_norm in zip(fb_l, fb_norms):
+                #if fb_norm > th_norm:
+                    ##print 'Killing fb', fb_norm
+                    ##print len(fb)
+                    #grads[offset:offset+len(fb)] = 0
+                #offset += len(fb)
+
+            if (np.array(fb_norms) > th_norm).any():
                 grads[:] = 0
+            #if (np.array(fb_norms) > th_norm).any() or W_norm > th_norm:
+                #grads[:] = 0
             #if self._n_calls >= 100:#200:
                 #grads[:] = 0
 
@@ -414,7 +431,7 @@ class SharpMind(object):
                 ##print 'max', max(abs(g)), abs(params).max()
                 ##print max(g), max(params)
                 ##th = lr * max(abs(g / params))
-                ###th = max(abs(g) / abs(params))
+                ###th = max(abs(g) / abs(params)) 
                 ##print 'th:', th
                 ##if th > 0.05:
                     ##lr *= 1.05
@@ -443,11 +460,6 @@ class SharpMind(object):
 def main():
 
     trn_X, trn_Y, tst_X, tst_Y = get_X_Y()
-
-    trn_X_orig = trn_X.copy()
-    trn_Y_orig = trn_Y.copy()
-    tst_X_orig = tst_X.copy()
-    tst_Y_orig = tst_Y.copy()
 
     m = SharpMind(convnet_desc)
     #pad = m.footprint
@@ -494,60 +506,59 @@ def main():
 
     SIZE = 512#*2#*2#3*512-1#1024
     N_BAGS = 1000
-    FOLLOW_AVG = 10#True#False
+    FOLLOW_AVG = False
     #DECAY = 1e-3
 
-    start = time.time()
 
     rng = np.random.RandomState(42)
     fb_l = None
     W = None
-    lr_min = 0.01#05#1#01#05#5e-2
-    eta0 = 1#.5#1#0.1
-    #gaussian_sigma = 1#0.5
+    lr_min = 1e-1#2# = 0.1#2#1e-2#1#1e-3#1#1e-2
+    #lr_min = 0.1
     for bag in xrange(N_BAGS):
-        print "BAGGING ITERATION", (bag + 1)
-        ##m = SharpMind(convnet_desc)
-        ##SIZE = (b + 1) * SIZE
-        ##trn_X_pad = water(trn_X_pad, sigma=10)
-        ##misc.imsave('trn_X_pad.png', trn_X_pad)
-        ##trn_X_pad = trn_X_pad_orig
-        ##if bag > 0:
-            ##trn_X_pad = water(trn_X_pad, sigma=0.8)
-            ##misc.imsave('trn_X_pad.png', trn_X_pad)
-        #angle = rng.randint(0, 360 + 1)
-        #trn_X_pad = ndimage.rotate(trn_X_pad_orig, angle,
-                                   #prefilter=False, order=0, mode='reflect')
-        #trn_Y_pad = ndimage.rotate(trn_Y_pad_orig, angle,
+
+        #if bag % 10 == 0:
+            #print '_' * 80
+            #print 'Building new model...'
+            #print '_' * 80
+            #m = SharpMind(convnet_desc)
+        #SIZE = (b + 1) * SIZE
+        #trn_X_pad = water(trn_X_pad, sigma=10)
+        #misc.imsave('trn_X_pad.png', trn_X_pad)
+        #trn_X_pad = trn_X_pad_orig
+        #if bag > 0:
+            #trn_X_pad = water(trn_X_pad, sigma=0.8)
+            #misc.imsave('trn_X_pad.png', trn_X_pad)
+        trn_X_pad = trn_X_pad_orig.copy()
+        trn_Y_pad = trn_Y_pad_orig.copy()
+
+        angle = rng.randint(0, 360 + 1)
+        trn_X_pad = ndimage.rotate(trn_X_pad, angle,
+                                   prefilter=False, order=0, mode='reflect')
+        trn_Y_pad = ndimage.rotate(trn_Y_pad, angle,
+                                   prefilter=False, order=0, mode='reflect')
+
+        #zoom = rng.uniform(0.8, 1.2)
+        #trn_X_pad = ndimage.zoom(trn_X_pad, zoom,
+                                   #prefilter=True, order=3, mode='reflect')
+        #trn_Y_pad = ndimage.zoom(trn_Y_pad, zoom,
                                    #prefilter=False, order=0, mode='reflect')
         ##trn_X_pad = water(trn_X_pad, sigma=1)
         #misc.imsave('trn_X_pad.png', trn_X_pad)
 
-        #print '>>> Finding a balanced patch...'
-        #bal = 0#np.inf#1
-        #bal_th = (trn_Y>0).mean()
-        #bal_tol = 0.01
-        #print 'bal_th:', bal_th
-        #print 'bal_tol:', bal_tol
-        #while abs(1 - bal / bal_th) > bal_tol:
-            #j, i = rng.randint(0, len(trn_X_pad)-SIZE+1, size=2)
-            ##print j, i
-            #trn_X = trn_X_pad[j:j+SIZE, i:i+SIZE].copy()
-            #trn_Y = trn_Y_pad[j:j+SIZE, i:i+SIZE].copy()
-            #pos = m.transform_Y(trn_Y)>0
-            ##import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-            ##print pos
-            #bal = 1. * pos.sum() / pos.size
-            ##print abs(1 - bal / bal_th), bal_tol
-        #print 'bal:', bal, j, i
-        from random_connectomics import *
-        trn_X = ndimage.rotate(trn_X_orig, bag * 90, prefilter=False, order=0)
-        trn_Y = ndimage.rotate(trn_Y_orig, bag * 90, prefilter=False, order=0)
-        trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
-
-        gaussian_sigma = np.random.uniform(0, 1)
-        print 'gaussian_sigma:', gaussian_sigma
-        trn_X = ndimage.gaussian_filter(trn_X, gaussian_sigma)
+        print '>>> Finding a balanced patch...'
+        bal = 1
+        bal_th = 0.8#75#8
+        while bal > bal_th:
+            j, i = rng.randint(0, len(trn_X_pad)-SIZE+1, size=2)
+            #print j, i
+            trn_X = trn_X_pad[j:j+SIZE, i:i+SIZE].copy()
+            trn_Y = trn_Y_pad[j:j+SIZE, i:i+SIZE].copy()
+            pos = m.transform_Y(trn_Y)>0
+            #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
+            #print pos
+            bal = 1. * pos.sum() / pos.size
+        print 'bal:', bal, j, i
 
         m.trn_Y = trn_Y
         m.trn_X = trn_X
@@ -558,7 +569,7 @@ def main():
             fb_l = m.fb_l
             W = m.W
         else:
-            lr = 1. / (1. + eta0 * bag)
+            lr = 1. / (bag + 1)
             lr = np.maximum(lr, lr_min)
             #lr = lr_min
             print 'lr:', lr
@@ -566,10 +577,11 @@ def main():
             #fb_l = [fb / np.linalg.norm(fb) for fb in fb_l]
             W = lr * m.W + (1 - lr) * W
             #W /= np.linalg.norm(W)
+            #misc.imsave('fb%0d'
 
-        #if not FOLLOW_AVG:
-        fb_l_bak = deepcopy(m.fb_l)
-        W_bak = deepcopy(m.W)
+        if not FOLLOW_AVG:
+            fb_l_bak = deepcopy(m.fb_l)
+            W_bak = deepcopy(m.W)
         m.fb_l = fb_l
         m.W = W
         trn_Y = m.transform_Y(trn_Y)
@@ -584,12 +596,8 @@ def main():
             #print j, i
             tst_X2 = tst_X_pad[j:j+SIZE, i:i+SIZE].copy()
             tst_Y2 = tst_Y_pad[j:j+SIZE, i:i+SIZE].copy()
-            gt = m.transform_Y(tst_Y2)
-            gv = m.transform(tst_X2)
-            misc.imsave('gt_%02d.png' % ti, gt)
-            misc.imsave('gv_%02d.png' % ti, gv)
-            gt = gt.ravel()
-            gv = gv.ravel()
+            gt = m.transform_Y(tst_Y2).ravel()
+            gv = m.transform(tst_X2).ravel()
             #print gv
             #print gv.shape
             #gv = median_filter(gv, radius=2).ravel()
@@ -610,17 +618,17 @@ def main():
         print
         print
         print '*' * 80
-        #if not FOLLOW_AVG or bag % FOLLOW_AVG > 0:
         if not FOLLOW_AVG:
             m.fb_l = fb_l_bak
             m.W = W_bak
-        else:
-            print "FOLLOW AVG !!!!!"
 
-        #if tst_pe > 0.76435:
-            #end = time.time()
-            #print 'time:', end - start
-            #return
+        #if tst_pe > 0.743:
+            #raise
+
+    #trn_Y = m.transform_Y(trn_Y)
+    #tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
+    #print 'tst_pe', tst_pe
+
 
 if __name__ == '__main__':
     main()

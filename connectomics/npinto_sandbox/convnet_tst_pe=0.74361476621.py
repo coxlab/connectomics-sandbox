@@ -484,6 +484,7 @@ def main():
     FOLLOW_AVG = False
     #DECAY = 1e-3
 
+    start = time.time()
 
     rng = np.random.RandomState(42)
     fb_l = None
@@ -555,8 +556,12 @@ def main():
             #print j, i
             tst_X2 = tst_X_pad[j:j+SIZE, i:i+SIZE].copy()
             tst_Y2 = tst_Y_pad[j:j+SIZE, i:i+SIZE].copy()
-            gt = m.transform_Y(tst_Y2).ravel()
-            gv = m.transform(tst_X2).ravel()
+            gt = m.transform_Y(tst_Y2)
+            gv = m.transform(tst_X2)
+            misc.imsave('gt_%02d.png' % ti, gt)
+            misc.imsave('gv_%02d.png' % ti, gv)
+            gt = gt.ravel()
+            gv = gv.ravel()
             #print gv
             #print gv.shape
             #gv = median_filter(gv, radius=2).ravel()
@@ -582,12 +587,9 @@ def main():
             m.W = W_bak
 
         if tst_pe > 0.743:
-            raise
-
-    #trn_Y = m.transform_Y(trn_Y)
-    #tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
-    #print 'tst_pe', tst_pe
-
+            end = time.time()
+            print 'time:', end - start
+            return
 
 if __name__ == '__main__':
     main()

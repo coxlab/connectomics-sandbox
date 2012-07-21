@@ -502,8 +502,8 @@ def main():
     rng = np.random.RandomState(42)
     fb_l = None
     W = None
-    lr_min = 0.01#05#1#01#05#5e-2
-    eta0 = 1#.5#1#0.1
+    lr_min = 0.1#01#05#5e-2
+    eta0 = 1#0.1
     #gaussian_sigma = 1#0.5
     for bag in xrange(N_BAGS):
         print "BAGGING ITERATION", (bag + 1)
@@ -617,10 +617,11 @@ def main():
         else:
             print "FOLLOW AVG !!!!!"
 
-        #if tst_pe > 0.76435:
-            #end = time.time()
-            #print 'time:', end - start
-            #return
+        #0.764359319812
+        if tst_pe > 0.76435:
+            end = time.time()
+            print 'time:', end - start
+            return
 
 if __name__ == '__main__':
     main()

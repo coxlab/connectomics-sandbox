@@ -502,9 +502,9 @@ def main():
     rng = np.random.RandomState(42)
     fb_l = None
     W = None
-    lr_min = 0.01#05#1#01#05#5e-2
-    eta0 = 1#.5#1#0.1
-    #gaussian_sigma = 1#0.5
+    lr_min = 0.1#01#05#5e-2
+    eta0 = 1#0.1
+    gaussian_sigma = 0.5
     for bag in xrange(N_BAGS):
         print "BAGGING ITERATION", (bag + 1)
         ##m = SharpMind(convnet_desc)
@@ -545,8 +545,6 @@ def main():
         trn_Y = ndimage.rotate(trn_Y_orig, bag * 90, prefilter=False, order=0)
         trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
 
-        gaussian_sigma = np.random.uniform(0, 1)
-        print 'gaussian_sigma:', gaussian_sigma
         trn_X = ndimage.gaussian_filter(trn_X, gaussian_sigma)
 
         m.trn_Y = trn_Y
@@ -617,10 +615,10 @@ def main():
         else:
             print "FOLLOW AVG !!!!!"
 
-        #if tst_pe > 0.76435:
-            #end = time.time()
-            #print 'time:', end - start
-            #return
+        if tst_pe > 0.76:
+            end = time.time()
+            print 'time:', end - start
+            return
 
 if __name__ == '__main__':
     main()
