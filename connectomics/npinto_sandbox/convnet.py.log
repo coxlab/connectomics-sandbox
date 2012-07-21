@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 training image
 /home/npinto/datasets/connectomics/isbi2012/pngs/train-volume.tif-00.png
 validation image
@@ -3228,3 +3229,5 @@ tst_shape: (61, 61)
 tst_pe: 0.68369408306
 ================================================================================
 ..
+=======
+>>>>>>> df4e02cb0539696bbe0f6cbbd6f041dc7e5171e0

@@ -39,3 +39,4 @@ echo "Done! Don't forget to run"
 echo "$ workon ${VENV_NAME}"
 echo "******************************************************"
 echo
+pip install -vUI --no-deps git+git://github.com/Theano/Theano.git
