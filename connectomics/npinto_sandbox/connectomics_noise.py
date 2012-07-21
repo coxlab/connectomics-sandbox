@@ -35,12 +35,12 @@ def add_noise_experimental(X, rseed=None):
     Y = 0 * X
 
     gau = get_gau(X, sigma=1)
-    mask = get_mask(X.shape, p=0.9, sigma=10., th=0.2)
-    Y += mask * gau + (1. - mask) * X
+    mask = get_mask(X.shape, p=0.9, sigma=10., th=0.8)
+    Y += (mask * gau + (1. - mask) * X)
 
     gau = get_gau(X, sigma=10.0)
     mask = get_mask(X.shape, p=0.999, sigma=10., th=0.5)
-    Y += (mask * gau + (1. - mask) * X)
+    Y += 1e-1 * (mask * gau + (1. - mask) * X)
 
     poi = get_poi(X.shape, lam=1.0, sigma=1.0)
     mask = get_mask(X.shape, p=0.999, sigma=10., th=0.2)
