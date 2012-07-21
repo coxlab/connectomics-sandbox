@@ -229,7 +229,12 @@ class SharpMind(object):
             #t_f = tensor.tanh(nnet.conv2d(t_input, t_fb))
             #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb) ** 2.)
             #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb)) ** 2.
-            t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb))
+            #t_f = tensor.maximum(0, nnet.conv2d(t_input, t_fb))
+            #t_f = tensor.minimum(1, t_f)
+            t_f = nnet.conv2d(t_input, t_fb)
+            #t_f = tensor.tanh(t_f)
+            #t_f = tensor.maximum(t_f, 0)
+            t_f = tensor.clip(t_f, 0, 1)
             t_p = downsample.max_pool_2d(t_f, (psize, psize))
             t_output = t_p
 
