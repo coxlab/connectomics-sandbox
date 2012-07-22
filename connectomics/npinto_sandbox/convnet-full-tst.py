@@ -20,6 +20,9 @@ from random_connectomics import *
 from connectomics_noise import *
 from connectomics_swirls import *
 
+from skimage import io
+io.use_plugin('freeimage')
+
 HOME = environ.get("HOME")
 
 from bangmetric import *
@@ -164,7 +167,19 @@ class SharpMind(object):
 
         return Y[0, 0]
 
-    def transform(self, X, Y_true=None):
+    def transform3d(self, X):
+
+        assert X.ndim == 3
+        assert X.dtype == 'float32'
+
+        # -- reshape to fit theano's convention
+        X = X.reshape((X.shape[0], 1) + X.shape[1:])
+
+        Y_pred = self.f(*([X] + self.fb_l + [self.W]))
+
+        return Y_pred
+
+    def transform(self, X):
 
         assert X.ndim == 2
         assert X.dtype == 'float32'
@@ -429,13 +444,13 @@ def main():
 
     trn_X_orig = trn_X.copy()
     trn_Y_orig = trn_Y.copy()
-    tst_X_orig = tst_X.copy()
-    tst_Y_orig = tst_Y.copy()
+    #tst_X_orig = tst_X.copy()
+    #tst_Y_orig = tst_Y.copy()
 
     m = SharpMind(convnet_desc)
 
-    trn_X_pad_orig = arraypad.pad(trn_X, 512, mode='symmetric')
-    trn_Y_pad_orig = arraypad.pad(trn_Y, 512, mode='symmetric')
+    #trn_X_pad_orig = arraypad.pad(trn_X, 512, mode='symmetric')
+    #trn_Y_pad_orig = arraypad.pad(trn_Y, 512, mode='symmetric')
     tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
     tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
 
@@ -453,6 +468,8 @@ def main():
     eta0 = 1#2#1#2#1#.2#1#.2#0.8#1#.5#1#0.1
     lr_min = 0.01#1e-3#0.1#1e-3#0.05#1#25#01#05#1#01#05#5e-2
     #gaussian_sigma = 1#0.5
+
+
     for bag in xrange(N_BAGS):
         print "BAGGING ITERATION", (bag + 1)
         ##m = SharpMind(convnet_desc)
@@ -537,6 +554,14 @@ def main():
         m.tst_Y = tst_Y
         m.tst_X = tst_X
         m.partial_fit(trn_X, trn_Y)
+
+        fp = m.footprint
+
+        X3d = view_as_windows(
+            arraypad.pad(tst_X, (fp/2, int(round(fp/2.) - 1)), mode='reflect'),
+            (fp, fp)
+            ).reshape(-1, fp, fp) 
+
         if fb_l is None:
             fb_l = m.fb_l
             W = m.W
@@ -595,6 +620,29 @@ def main():
         print 'FINAL TST_PE:', tst_pe
         print
         print
+
+        print ">>> Computing tst_Y_pred..."
+        tic = time.time()
+        tst_Y_pred = m.transform3d(X3d).reshape(tst_X.shape).astype('float32')
+        toc = time.time()
+        print tst_Y_pred.shape
+        print 'time:', toc - tic
+
+        print ">>> Saving Y_true.tif"
+        tst_Y = tst_Y.astype('f')
+        tst_Y -= tst_Y.min()
+        tst_Y /= tst_Y.max()
+        io.imsave('Y_true.tif', tst_Y, plugin='freeimage')
+        misc.imsave('Y_true.tif.png', tst_Y)
+
+        print ">>> Saving",
+        fname = 'Y_pred.bag%05d.%s.tif' % (bag, tst_pe)
+        print fname
+        tst_Y_pred -= tst_Y_pred.min()
+        tst_Y_pred /= tst_Y_pred.max()
+        io.imsave(fname, tst_Y_pred, plugin='freeimage')
+        misc.imsave(fname + '.png', tst_Y_pred)
+
         print '*' * 80
         #if not FOLLOW_AVG or bag % FOLLOW_AVG > 0:
         if not FOLLOW_AVG:
