@@ -26,6 +26,7 @@ from bangmetric import *
 
 #l = (misc.lena() / 1.).astype('f')
 print theano.config.openmp
+theano.config.warn.sum_div_dimshuffle_bug = False
 
 from xform import water
 
@@ -168,8 +169,8 @@ class SharpMind(object):
         assert X.ndim == 2
         assert X.dtype == 'float32'
 
-        X -= X.mean()
-        X /= X.std()
+        #X -= X.mean()
+        #X /= X.std()
 
         # -- reshape to fit theano's convention
         #print '>>> X.shape:', X.shape
@@ -187,8 +188,8 @@ class SharpMind(object):
         assert X.ndim == 2
         assert X.dtype == 'float32'
 
-        X -= X.mean()
-        X /= X.std()
+        #X -= X.mean()
+        #X /= X.std()
 
         assert Y_true.ndim == 2
         assert Y_true.dtype == 'float32'
@@ -235,6 +236,10 @@ class SharpMind(object):
                 fb_l += [fb]
 
             t_input = t_output
+
+            #t_input -= tensor.mean(t_input)
+            #t_input /= tensor.std(t_input)
+
             t_fb = tensor.ftensor4()
             t_f = nnet.conv2d(t_input, t_fb,
                               #image_shape=input_shape,
@@ -266,18 +271,21 @@ class SharpMind(object):
             t_p_l += [t_p]
             t_output_l += [t_output]
 
+        #t_output -= tensor.mean(t_output)
+        #t_output /= tensor.std(t_output)
+
         # -- MLP
         W_size = fb_l[-1].shape[0]
         t_Y_pred = tensor.tensordot(t_output, t_W[:-1], axes=[(1,), (0,)]) + t_W[-1]
         #t_Y_pred = nnet.sigmoid(t_Y_pred)
-        sigmoid_factor = 4#2
+        sigmoid_factor = 4#1#4#2
         t_Y_pred = 1. / (1. + tensor.exp(-sigmoid_factor*t_Y_pred))
         #t_Y_pred = (1. + t_Y_pred) / 2
 
         #t_Y_true = t_Y_true[:, 0, :, :]
         #t_Y_true = 2. * (t_Y_true > 0.) - 1
         #t_loss = ((t_Y_pred - t_Y_true[:, 0, :, :]) ** 2.).mean()
-        epsilon = 0.1#.1#2#.1#.2#1#2#3#0.2
+        epsilon = 0.1#0#2#2#1#.1#2#.1#.2#1#2#3#0.2
         l2_regularization = 0#1e-4#3#0#1e-6#3#.1
         #t_Y_true = 2. * (t_Y_true > 0.) - 1
         #t_loss = (tensor.maximum(0, 1 - t_Y_pred*t_Y_true[:, 0, :, :] - epsilon) ** 2.).mean()
@@ -367,7 +375,7 @@ class SharpMind(object):
             # pack parameters
             grad_norms = [np.linalg.norm(g.ravel()) for g in grads]
             grads = np.concatenate([g.ravel() for g in grads])
-            th_norm = 2#1.5
+            th_norm = 2#1.5#2#3#2#1.5
             if (np.array(fb_norms) > th_norm).any() or W_norm > th_norm:
                 grads[:] = 0
             #if self._n_calls >= 100:#200:
@@ -515,8 +523,9 @@ def main():
     rng = np.random.RandomState(42)
     fb_l = None
     W = None
-    lr_min = 0.01#05#1#01#05#5e-2
-    eta0 = 1#.2#0.8#1#.5#1#0.1
+    lr_exp = 0#0.75
+    eta0 = 1#2#1#2#1#.2#1#.2#0.8#1#.5#1#0.1
+    lr_min = 0.01#1e-3#0.1#1e-3#0.05#1#25#01#05#1#01#05#5e-2
     #gaussian_sigma = 1#0.5
     for bag in xrange(N_BAGS):
         print "BAGGING ITERATION", (bag + 1)
@@ -556,34 +565,42 @@ def main():
         trn_X = trn_X_orig.copy()
         trn_Y = trn_Y_orig.copy()
 
-        if rng.binomial(1, .5):
-            print 'flip h...'
-            trn_X = trn_X[:, ::-1]
-            trn_Y = trn_Y[:, ::-1]
+        #if rng.binomial(1, .5):
+            #print 'flip h...'
+            #trn_X = trn_X[:, ::-1]
+            #trn_Y = trn_Y[:, ::-1]
 
-        if rng.binomial(1, .5):
-            print 'flip v...'
-            trn_X = trn_X[::-1, :]
-            trn_Y = trn_Y[::-1, :]
+        #if rng.binomial(1, .5):
+            #print 'flip v...'
+            #trn_X = trn_X[::-1, :]
+            #trn_Y = trn_Y[::-1, :]
 
-        if rng.binomial(1, .5):
-            print 'rotate...'
-            trn_X = ndimage.rotate(trn_X, bag * 90, prefilter=False, order=0)
-            trn_Y = ndimage.rotate(trn_Y, bag * 90, prefilter=False, order=0)
+        #if rng.binomial(1, .5):
+        if bag > 0:
+            if True:
+                print 'swirls...'
+                trn_X, trn_Y = random_swirls(trn_X, trn_Y, rseed=bag)
 
-        if rng.binomial(1, .5):
-            print 'swirls...'
-            trn_X, trn_Y = random_swirls(trn_X, trn_Y, rseed=bag)
+            #if rng.binomial(1, .5):
+            #if True:
+                #print 'exp noise...'
+                #trn_X = add_noise_experimental(trn_X)
 
-        if rng.binomial(1, .5):
-            print 'random xform...'
-            trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
+            trn_X -= trn_X.mean()
+            trn_X /= trn_X.std()
 
-        if rng.binomial(1, .5):
-            print 'exp noise...'
-            trn_X = add_noise_experimental(trn_X)
+            #if rng.binomial(1, .5):
+            if True:
+                print 'rotate...'
+                trn_X = ndimage.rotate(trn_X, bag * 90, prefilter=False, order=0)
+                trn_Y = ndimage.rotate(trn_Y, bag * 90, prefilter=False, order=0)
 
-        print trn_X.min(), trn_X.max()
+            #if rng.binomial(1, .5):
+            if True:
+                print 'random xform...'
+                trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
+
+            print trn_X.min(), trn_X.max()
 
         #gaussian_sigma = rng.uniform(0, .5)
         #print 'gaussian_sigma:', gaussian_sigma
@@ -598,7 +615,10 @@ def main():
             fb_l = m.fb_l
             W = m.W
         else:
-            lr = 1. / (1. + eta0 * bag)
+            if lr_exp > 0:
+                lr = 1. * eta0 / (1. + eta0 * bag) ** lr_exp
+            else:
+                lr = 1. / (1. + bag)
             lr = np.maximum(lr, lr_min)
             #lr = lr_min
             print 'lr:', lr
