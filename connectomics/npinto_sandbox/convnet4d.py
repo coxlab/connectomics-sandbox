@@ -34,9 +34,10 @@ theano.config.warn.sum_div_dimshuffle_bug = False
 from xform import water
 
 convnet_desc = [
-    (16, 9, 2),
-    (16, 9, 2),
-    (16, 9, 2),
+    (16, 5, 2),
+    (16, 5, 2),
+    (16, 5, 2),
+    #(16, 5, 2),
     #(16, 5, 2),
     #(48, 3, 2),
     #(2, 5, 2),
@@ -55,64 +56,11 @@ DEFAULT_LBFGS_PARAMS = dict(
     )
 
 
-def get_X_Y():
-    N_IMGS = 1
-    N_IMGS_VAL = 1
-    print 'training image'
-    trn_X_l = []
-    trn_Y_l = []
-    for i in range(N_IMGS):
-        #i += 10
-        trn_fname = path.join(
-            HOME, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i)
-        print trn_fname
-        trn_X = (misc.imread(trn_fname, flatten=True) / 255.).astype('f')
-        #trn_X -= trn_X.min()
-        #trn_X /= trn_X.max()
-        trn_X -= trn_X.mean()
-        trn_X /= trn_X.std()
-        trn_Y = (misc.imread(trn_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
-        trn_X_l += [trn_X]
-        trn_Y_l += [trn_Y]
-    trn_X = np.array(trn_X_l).reshape(N_IMGS*512, 512)
-    trn_Y = np.array(trn_Y_l).reshape(N_IMGS*512, 512)
-
-    print 'validation image'
-    val_X_l = []
-    val_Y_l = []
-    for j in range(N_IMGS_VAL):
-        k = j + i + 1
-        val_fname = path.join(
-            HOME, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % k)
-        print val_fname
-        val_X = (misc.imread(val_fname, flatten=True) / 255.).astype('f')
-        #val_X -= val_X.min()
-        #val_X /= val_X.max()
-        val_X -= val_X.mean()
-        val_X /= val_X.std()
-        val_Y = (misc.imread(val_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
-        val_X_l += [val_X]
-        val_Y_l += [val_Y]
-    val_X = np.array(val_X_l).reshape(N_IMGS_VAL*512, 512)
-    val_Y = np.array(val_Y_l).reshape(N_IMGS_VAL*512, 512)
-
-
-    print 'testing image'
-    tst_fname = path.join(HOME, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png')
-    print tst_fname
-    tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-    #tst_X -= tst_X.min()
-    #tst_X /= tst_X.max()
-    tst_X -= tst_X.mean()
-    tst_X /= tst_X.std()
-    tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
-
-    return trn_X, trn_Y, tst_X, tst_Y
-
+from connectomics_data import get_X_Y
 
 class SharpMind(object):
 
-    def __init__(self, convnet_desc):
+    def __init__(self, convnet_desc, rng=None):
 
         # -- model description
         for i, (nf, fsize, psize) in enumerate(convnet_desc):
@@ -131,136 +79,179 @@ class SharpMind(object):
         self.footprint = footprint
         print ">>> Footprint: %d" % footprint
 
+        if rng is None:
+            rng = np.random.RandomState()
+        self.rng = rng
+
         self.fb_l = None
         self.W = None
         #self.b = None
 
         self.f = None
 
-    def transform_Y(self, Y):
+        self.msize_best = None
 
-        Y = Y.reshape((1, 1) + Y.shape)
+        self.lr_exp = 0
+        self.eta0 = 1
+        self.lr_min = 0.01
+        self.total_n_batches = 0
 
-        output_shape = Y.shape
-        for i, (nf, fsize, psize) in enumerate(self.convnet_desc):
-            input_shape = output_shape
+    def _safe_X_Y(self, X, Y=None):
 
-            # hack to get the output_shape
-            output_shape = np.empty(
-                (input_shape[0], nf,
-                 (input_shape[2] - fsize + 1),
-                 (input_shape[3] - fsize + 1)),
-                dtype='uint8',
-                )[:, :, ::psize, ::psize].shape
-
-            fsize2 = fsize // 2
-            Y = Y[:, :, fsize2:-fsize2, fsize2:-fsize2]
-            Y = Y[:, :, ::psize, ::psize]
-            #Y = arraypad.pad(Y[0, 0], (psize // 2, int(round(psize / 2.) - 1)), mode='constant')
-            #Y = view_as_windows(Y, (psize, psize))
-            #Y = Y.reshape(Y.shape[:2] + (-1,))
-            #Y = Y.min(-1)
-            #Y = Y[::psize, ::psize]
-            #Y = Y.reshape((1, 1) + Y.shape)
-            #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-            assert Y.shape[2:] == output_shape[2:], (Y.shape, output_shape)
-
-        return Y[0, 0]
-
-    def transform3d(self, X, batch_size=1000):
-
-        assert X.ndim == 3
+        assert X.ndim == 2 or X.ndim == 3
         assert X.dtype == 'float32'
+        X_h, X_w = X.shape[:2]
 
-        tic = time.time()
+        if Y is None:
+            return X
 
-        n_imgs = X.shape[0]
-        X = X.reshape((n_imgs, 1) + X.shape[1:])
+        else:
+            assert Y.ndim == 2
+            assert Y.dtype == 'float32'
+            Y_h, Y_w = Y.shape
+
+            assert Y_h == X_h
+            assert Y_w == X_w
+
+            return X, Y
+
+    def _reshape_X(self, X):
+
+        X = self._safe_X_Y(X)
+
+        if X.ndim == 2:
+            X = X.reshape(X.shape + (1,))
+
+        X_d = X.shape[-1]
+
+        # -- pad
+        fp = self.footprint
+        pad_shape = fp/2, int(round(fp/2.) - 1)
+        X = np.dstack([
+            arraypad.pad(X[..., i], pad_shape, mode='reflect')
+            for i in xrange(X_d)
+        ])
+
+        # -- rolling view
+        X = view_as_windows(X, (fp, fp, 1))
+        X = X.reshape(-1, fp, fp, X_d)
+
+        # -- reshape to fit theano's convention
+        X = X.swapaxes(1, 3)
+
+        return X
+
+    def transform(self, X, verbose=False):
+
+
+        handled_errors = [
+            'Was not able to allocate output!',
+            'expected a CudaNdarray, not None',
+        ]
+
+        Xrv = self._reshape_X(X)
+
+        n_patches = Xrv.shape[0]
+
+        # -- super-hacky way of computing all the patches while growing
+        # the size of the batch computed by theano, this is especially
+        # useful to get around memory errors while using the GPU
+        # XXX: report this annoyance to theano-dev
+        if self.msize_best is None:
+            msize = 512
+            msize_best = msize
+            grow_msize = True
+        else:
+            msize = msize_best = self.msize_best
+            grow_msize = False
+
         Y_pred = None
         i = 0
-        while i < n_imgs:
+        while i < n_patches:
             b = time.time()
-            Xin = X[i:i+batch_size]
-            Xout = self.f(*([Xin] + self.fb_l + [self.W]))
+            if verbose:
+                print msize, msize_best
+
+            try:
+                Xin = Xrv[i:i+msize]
+                Xout = self.f(*([Xin] + self.fb_l + [self.W])).ravel()
+                msize_best = msize  # it worked with msize
+            except Exception, err:
+                if verbose:
+                    print err.message
+                # hacky way to detect a out of memory error in theano
+                if err.message in handled_errors:
+                    if verbose:
+                        print "!!! Memory error detected: hacking around..."
+                    Xin = Xrv[i:i+msize_best]
+                    Xout = self.f(*([Xin] + self.fb_l + [self.W])).ravel()
+                    grow_msize = False
+                    msize = msize_best
+                else:
+                    raise err
+
             if Y_pred is None:
                 Y_pred = Xout
             else:
-                Y_pred = np.vstack((Y_pred, Xout))
-            i += batch_size
-            print 't:', time.time() - b
+                Y_pred = np.concatenate((Y_pred, Xout))
 
-        toc = time.time()
-        print 'time:', toc - tic
+            i += msize
+
+            if verbose:
+                print 't: %.3f, msize_best: %d' % (time.time() - b, msize_best)
+
+            if grow_msize:
+                msize *= 1.8  # grow by 80%
+
+        self.msize_best = msize_best
+
+        assert len(Y_pred) == len(X.flat), (len(Y_pred), len(X.flat))
+        Y_pred = Y_pred.reshape(X.shape[:2])
+
+        assert Y_pred.dtype == X.dtype
 
         return Y_pred
 
-    def transform(self, X):
+    def partial_fit(self, X, Y_true, n_batches=100, batch_size=61*61):
 
-        assert X.ndim == 2
-        assert X.dtype == 'float32'
-
-        #X -= X.mean()
-        #X /= X.std()
-
-        # -- reshape to fit theano's convention
-        #print '>>> X.shape:', X.shape
-        X = X.reshape((1, 1) + X.shape)
-        #print '>>> X.shape:', X.shape
-
-        Y_pred = self.f(*([X] + self.fb_l + [self.W]))
-
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-
-        return Y_pred[0]
-
-    def partial_fit(self, X, Y_true):
-
-        assert X.ndim == 2
-        assert X.dtype == 'float32'
-
-        #X -= X.mean()
-        #X /= X.std()
-
-        assert Y_true.ndim == 2
-        assert Y_true.dtype == 'float32'
-
-        # -- reshape to fit theano's convention
         print '>>> X.shape:', X.shape
-        X = X.reshape((1, 1) + X.shape)
-        print '>>> X.shape:', X.shape
-
-        print '>>> Y_true.shape:', Y_true.shape
-        Y_true = Y_true.reshape((1, 1) + Y_true.shape)
         print '>>> Y_true.shape:', Y_true.shape
 
-        # -- theano stuff
-        t_X = tensor.ftensor4()
-        t_Y_true = tensor.ftensor4()
-        t_W = tensor.fvector()
+        X, Y_true = self._safe_X_Y(X, Y_true)
+        X = self._reshape_X(X)
+        Y_true = Y_true.ravel()
 
+        print '>>> X.shape (new):', X.shape
+        print '>>> Y_true.shape (new):', Y_true.shape
+
+        # -- filterbank renormalization
         if self.fb_l is None:
             fb_l = []
         else:
             fb_l = [fb / np.linalg.norm(fb) for fb in self.fb_l]
 
+        # -- theano stuff
+        t_X = tensor.ftensor4()
+        #t_Y_true = tensor.ftensor4()
+        t_Y_true = tensor.fvector()
+        t_W = tensor.fvector()
+
         t_input_l = []
         input_l = []
         t_fb_l = []
-        t_f_l = []
-        t_p_l = []
+        t_F_l = []
+        t_A_l = []
+        t_P_l = []
         t_output_l = []
 
         # -- ConvNet
-        output_shape = X.shape
         t_output = t_X
+        prev_nf = X.shape[1]
         for i, (nf, fsize, psize) in enumerate(self.convnet_desc):
-            input_shape = output_shape
+            # init filterbanks if needed
             if self.fb_l is None:
                 np.random.seed(42)
-                #fb = np.random.uniform(size=(nf, input_shape[1], fsize, fsize)).astype('f')
-                #fb_shape = (nf, input_shape[1], fsize, fsize)
-                #fb = np.ones(fb_shape, dtype='f')
-                fb = np.random.randn(nf, input_shape[1], fsize, fsize).astype('f')
+                fb = np.random.randn(nf, prev_nf, fsize, fsize).astype('f')
                 fb -= fb.mean()
                 fb /= np.linalg.norm(fb.ravel())
                 fb_l += [fb]
@@ -270,64 +261,60 @@ class SharpMind(object):
             #t_input -= tensor.mean(t_input)
             #t_input /= tensor.std(t_input)
 
+            # -- filter
             t_fb = tensor.ftensor4()
-            t_f = nnet.conv2d(t_input, t_fb,
+            t_F = nnet.conv2d(t_input, t_fb,
                               #image_shape=input_shape,
                               filter_shape=fb.shape
                              )
-            #t_f = tensor.tanh(t_f)
-            t_f = tensor.maximum(t_f, 0)
-            #t_f = tensor.clip(t_f, 0, 1)
-            t_p = downsample.max_pool_2d(t_f, (psize, psize))
-            t_output = t_p
 
-            # hack to get the output_shape
-            output_shape = np.empty(
-                (input_shape[0], nf,
-                 (input_shape[2] - fsize + 1),
-                 (input_shape[3] - fsize + 1)),
-                dtype='uint8',
-                )[:, :, ::psize, ::psize].shape
+            # -- activ
+            #t_A = tensor.tanh(t_F)
+            t_A = tensor.maximum(t_F, 0)
+            #t_A = tensor.clip(t_F, 0, 1)
 
-            fsize2 = fsize // 2
-            Y_true = Y_true[:, :, fsize2:-fsize2, fsize2:-fsize2]
-            Y_true = Y_true[:, :, ::psize, ::psize]
-            assert Y_true.shape[2:] == output_shape[2:], (Y_true.shape, output_shape)
+            # -- pool
+            t_P = downsample.max_pool_2d(t_A, (psize, psize))
+            t_output = t_P
 
             input_l += [input]
             t_input_l += [t_input]
             t_fb_l += [t_fb]
-            t_f_l += [t_f]
-            t_p_l += [t_p]
+            t_F_l += [t_F]
+            t_A_l += [t_A]
+            t_P_l += [t_P]
             t_output_l += [t_output]
+
+            prev_nf = nf
+
+        t_output = tensor.flatten(t_output, outdim=2)
 
         #t_output -= tensor.mean(t_output)
         #t_output /= tensor.std(t_output)
 
-        # -- MLP
+        # -- multi-layer perceptron (mlp)
         W_size = fb_l[-1].shape[0]
-        t_Y_pred = tensor.tensordot(t_output, t_W[:-1], axes=[(1,), (0,)]) + t_W[-1]
-        #t_Y_pred = nnet.sigmoid(t_Y_pred)
-        sigmoid_factor = 4#1#4#2
-        t_Y_pred = 1. / (1. + tensor.exp(-sigmoid_factor*t_Y_pred))
-        #t_Y_pred = (1. + t_Y_pred) / 2
+        t_Y_pred = tensor.dot(t_output, t_W[:-1]) + t_W[-1]
+        sigmoid_factor = 4
+        t_Y_pred = 1. / (1. + tensor.exp(-sigmoid_factor * t_Y_pred))
 
-        #t_Y_true = t_Y_true[:, 0, :, :]
-        #t_Y_true = 2. * (t_Y_true > 0.) - 1
-        #t_loss = ((t_Y_pred - t_Y_true[:, 0, :, :]) ** 2.).mean()
-        epsilon = 0.1#0#2#2#1#.1#2#.1#.2#1#2#3#0.2
-        l2_regularization = 0#1e-4#3#0#1e-6#3#.1
-        #t_Y_true = 2. * (t_Y_true > 0.) - 1
-        #t_loss = (tensor.maximum(0, 1 - t_Y_pred*t_Y_true[:, 0, :, :] - epsilon) ** 2.).mean()
-        t_loss = (tensor.maximum(0, (t_Y_pred - t_Y_true[:, 0, :, :]) ** 2 - epsilon) ** 2.).mean()
+        # -- loss
+        epsilon = 0.1
+        l2_regularization = 0
+        t_loss = tensor.maximum(0, ((t_Y_pred - t_Y_true) ** 2.) - epsilon)
+        t_loss = t_loss ** 2.
+        t_loss = t_loss.mean()
+
+        # regularization
         for t_fb in t_fb_l:
             t_loss += l2_regularization * tensor.dot(t_fb.flatten(), t_fb.flatten())
         t_loss += l2_regularization * tensor.dot(t_W.flatten(), t_W.flatten())
 
+        # -- gradients
         t_dloss_dfb_l = [tensor.grad(t_loss, t_fb) for t_fb in t_fb_l]
         t_dloss_dW = tensor.grad(t_loss, t_W)
-        #t_dloss_db = tensor.grad(t_loss, t_W)
 
+        # -- compile functions
         if self.f is None:
             print '>>> Compiling theano functions...'
             print 'f...'
@@ -369,8 +356,10 @@ class SharpMind(object):
 
             return fb_l, W
 
-        #ciw = self.ciw
-        def minimize_me(params):
+        def minimize_me(params, *args):
+
+            current_X = args[0]
+            current_Y_true = args[1]
 
             stdout.write('.')
             stdout.flush()
@@ -379,76 +368,80 @@ class SharpMind(object):
             fb_l, W = unpack_params(params)
             self.fb_l = fb_l
             self.W = W
-            #fb_l = [fb / np.linalg.norm(fb.ravel()) for fb in fb_l]
-            #W_norm = np.linalg.norm(W.ravel())
-            #if W_norm > 0:
-                #W = W / W_norm
-            #self.fb_l = fb_l
-            #self.W = W
-            #new_fb_l = []
-            #for fb in fb_l:
-                #fb_norm = np.linalg.norm(fb.ravel())
-                #if fb_norm > 2:
-                    #print 'renorm', fb.shape
-                    #fb /= fb_norm
-                #new_fb_l.append(fb)
+
             fb_norms = [np.linalg.norm(fb.ravel()) for fb in fb_l]
             W_norm = np.linalg.norm(W)
-            #for fb, fb_norm in zip(fb_l, fb_no
-            #if (np.array(fb_norms) > 1.5).any():
 
             # get loss and gradients from theano function
-            out = df(*([X] + fb_l + [W, Y_true]))
+            out = df(*([current_X] + fb_l + [W, current_Y_true]))
             loss = out[0]
             grads = out[1:]
 
             # pack parameters
             grad_norms = [np.linalg.norm(g.ravel()) for g in grads]
             grads = np.concatenate([g.ravel() for g in grads])
-            th_norm = 2#1.5#2#3#2#1.5
+            th_norm = 2
+            stop = False
             if (np.array(fb_norms) > th_norm).any() or W_norm > th_norm:
-                grads[:] = 0
-            #if self._n_calls >= 100:#200:
-                #grads[:] = 0
-
-            if self._n_calls % 10 == 0:
                 print
-                print '=' * 80
+                print '!!! Zeroing gradients / loss'
+                grads *= 0
+                loss *= 0
+                stop = True
+
+            if stop or (self._n_calls > 0 and self._n_calls % 10 == 0):
+                print
+                #print '=' * 80
                 print '#calls:', self._n_calls
                 print 'elapsed:', time.time() - self.time_start
                 print 'fb norms:', fb_norms
                 print 'W norm:', W_norm
                 print 'grad norms:', grad_norms
-                print '-' * 80
-                try:
-                    print 'trn_shape:', self.transform_Y(self.trn_X).shape
-                    trn_pe = pearson(self.transform_Y(self.trn_Y).ravel(),
-                                     self.transform(self.trn_X).ravel())
-                    print 'trn_pe:', trn_pe
-                    print 'tst_shape:', self.transform_Y(self.tst_X).shape
-                    tst_pe = pearson(self.transform_Y(self.tst_Y).ravel(),
-                                     self.transform(self.tst_X).ravel())
-                    print 'tst_pe:', tst_pe
-                    #ratio = tst_pe / trn_pe
-                    #print 'ratio:', ratio
-                    #if ratio < 0.8:#9:
-                        #grads[:] = 0
-                except AssertionError:
-                    pass
-                print '=' * 80
+                #print '-' * 80
+                #print '=' * 80
 
             self._n_calls += 1
             # fmin_l_bfgs_b needs double precision...
             return loss.astype('float64'), grads.astype('float64')
 
-        # pack parameters
+        # -- optimize
         lbfgs_params = DEFAULT_LBFGS_PARAMS
-        params = np.concatenate([fb.ravel() for fb in fb_l] + [W.ravel()])
-        best, bestval, info = fmin_l_bfgs_b(minimize_me, params, **lbfgs_params)
+        lbfgs_params['iprint'] = -1
 
-        best_fb_l, best_W = unpack_params(best)
-        self.fb_l = best_fb_l
-        self.W = best_W
+        # pack parameters
+        params = np.concatenate([fb.ravel() for fb in fb_l] + [W.ravel()])
+
+        for bi in xrange(n_batches):
+            print "Batch %d" % (bi + 1)
+            if bi > 0:
+                self.fb_l = [fb / max(np.linalg.norm(fb), 1) for fb in self.fb_l]
+                self.W /= max(np.linalg.norm(self.W), 1)
+
+            ridx = self.rng.permutation(len(X))[:batch_size]
+            print len(ridx)
+            current_X = X[ridx].copy()
+            current_Y_true = Y_true[ridx].copy()
+            self._n_calls = 0
+            best, bestval, info = fmin_l_bfgs_b(
+                minimize_me, 
+                params,
+                args=(current_X, current_Y_true),
+                **lbfgs_params)
+
+            best_fb_l, best_W = unpack_params(best)
+
+            if self.lr_exp > 0:
+                lr = 1. * self.eta0 / (1. + self.eta0 * bi) ** self.lr_exp
+            else:
+                lr = 1. / (1. + self.total_n_batches + bi)
+            lr = np.maximum(lr, self.lr_min)
+
+            print 'lr:', lr
+            self.fb_l = [lr * best_fb_l[i] + (1 - lr) * self.fb_l[i]
+                         for i in xrange(len(fb_l))]
+
+            self.W = lr * best_W + (1 - lr) * self.W
+            self.total_n_batches += 1
 
         return self
 
@@ -457,12 +450,31 @@ def main():
 
     trn_X, trn_Y, tst_X, tst_Y = get_X_Y()
 
+    m = SharpMind(convnet_desc)
+
+    #m.trn_Y = trn_Y
+    #m.trn_X = trn_X
+    #m.tst_Y = tst_Y
+    #m.tst_X = tst_X
+    maxsize = 128
+    N_ITERATIONS = 10
+    for iter in xrange(N_ITERATIONS):
+        m.partial_fit(trn_X[:maxsize, :maxsize], trn_Y[:maxsize, :maxsize],
+                      n_batches=1)
+        print 'pe...'
+        trn_pe = pearson(trn_Y.ravel(), m.transform(trn_X).ravel())
+        print 'trn_pe:', trn_pe
+        tst_pe = pearson(tst_Y.ravel(), m.transform(tst_X).ravel())
+        print 'tst_pe:', tst_pe
+
+        print 'total_n_batches:', m.total_n_batches
+
+    return
+
     trn_X_orig = trn_X.copy()
     trn_Y_orig = trn_Y.copy()
     #tst_X_orig = tst_X.copy()
     #tst_Y_orig = tst_Y.copy()
-
-    m = SharpMind(convnet_desc)
 
     #trn_X_pad_orig = arraypad.pad(trn_X, 512, mode='symmetric')
     #trn_Y_pad_orig = arraypad.pad(trn_Y, 512, mode='symmetric')

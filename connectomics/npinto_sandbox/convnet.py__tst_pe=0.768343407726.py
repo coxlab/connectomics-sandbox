@@ -20,9 +20,6 @@ from random_connectomics import *
 from connectomics_noise import *
 from connectomics_swirls import *
 
-from skimage import io
-io.use_plugin('freeimage')
-
 HOME = environ.get("HOME")
 
 from bangmetric import *
@@ -34,9 +31,9 @@ theano.config.warn.sum_div_dimshuffle_bug = False
 from xform import water
 
 convnet_desc = [
-    (16, 9, 2),
-    (16, 9, 2),
-    (16, 9, 2),
+    (16, 5, 2),
+    (16, 5, 2),
+    (16, 5, 2),
     #(16, 5, 2),
     #(48, 3, 2),
     #(2, 5, 2),
@@ -167,34 +164,7 @@ class SharpMind(object):
 
         return Y[0, 0]
 
-    def transform3d(self, X, batch_size=1000):
-
-        assert X.ndim == 3
-        assert X.dtype == 'float32'
-
-        tic = time.time()
-
-        n_imgs = X.shape[0]
-        X = X.reshape((n_imgs, 1) + X.shape[1:])
-        Y_pred = None
-        i = 0
-        while i < n_imgs:
-            b = time.time()
-            Xin = X[i:i+batch_size]
-            Xout = self.f(*([Xin] + self.fb_l + [self.W]))
-            if Y_pred is None:
-                Y_pred = Xout
-            else:
-                Y_pred = np.vstack((Y_pred, Xout))
-            i += batch_size
-            print 't:', time.time() - b
-
-        toc = time.time()
-        print 'time:', toc - tic
-
-        return Y_pred
-
-    def transform(self, X):
+    def transform(self, X, Y_true=None):
 
         assert X.ndim == 2
         assert X.dtype == 'float32'
@@ -446,9 +416,47 @@ class SharpMind(object):
         params = np.concatenate([fb.ravel() for fb in fb_l] + [W.ravel()])
         best, bestval, info = fmin_l_bfgs_b(minimize_me, params, **lbfgs_params)
 
+        #lr = 1e-3
+        ##ssa = 1. / (i + 1)
+        ##xa = (1 - ssa) * xa + ssa * x
+        #EPSILON = 1e-6
+        ##Xorig = X.copy()
+        ##footprint = self.footprint
+        ##rng = np.random.RandomState(42)
+        ##print footprint
+        ##print len(Xorig)
+        #while True:
+            ##j, i = rng.randint(0, Xorig.shape[-1]-footprint, size=2)
+            ##X = Xorig[j:j+footprint, i:i+footprint]
+            ##print X.shape
+            #try:
+                #l, g = minimize_me(params)
+                #params -= lr * g
+                ##print 'max', max(abs(g)), abs(params).max()
+                ##print max(g), max(params)
+                ##th = lr * max(abs(g / params))
+                ###th = max(abs(g) / abs(params))
+                ##print 'th:', th
+                ##if th > 0.05:
+                    ##lr *= 1.05
+                ##else:
+                    ##lr *= 0.95
+                ##print lr
+                #if (abs(g) < EPSILON).all():
+                    #break
+            #except KeyboardInterrupt:
+                #pass
+
+        #fb_l, W = unpack_params(params)
+        #self.fb_l = fb_l
+        #self.W = W
+
+        #best, bestval, info = fmin_l_bfgs_b(minimize_me, params, **lbfgs_params)
+
         best_fb_l, best_W = unpack_params(best)
         self.fb_l = best_fb_l
         self.W = best_W
+        #self.b = best_b
 
         return self
 
@@ -459,13 +467,49 @@ def main():
 
     trn_X_orig = trn_X.copy()
     trn_Y_orig = trn_Y.copy()
-    #tst_X_orig = tst_X.copy()
-    #tst_Y_orig = tst_Y.copy()
+    tst_X_orig = tst_X.copy()
+    tst_Y_orig = tst_Y.copy()
 
     m = SharpMind(convnet_desc)
+    #pad = m.footprint
+    #print pad
 
-    #trn_X_pad_orig = arraypad.pad(trn_X, 512, mode='symmetric')
-    #trn_Y_pad_orig = arraypad.pad(trn_Y, 512, mode='symmetric')
+    ##trn_X_pad = arraypad.pad(trn_X, 512, mode='symmetric')
+    ##trn_Y_pad = arraypad.pad(trn_Y, 512, mode='symmetric')
+    ##tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
+    ##tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
+##
+    ##trn_X = trn_X_pad
+    ##trn_Y = trn_Y_pad
+    ##tst_X = tst_X_pad
+    ##tst_Y = tst_Y_pad
+    #m.trn_Y = trn_Y
+    #m.trn_X = trn_X
+    #m.tst_Y = tst_Y
+    #m.tst_X = tst_X
+    #print '*' * 80
+    #print 'trn final shape:', m.transform_Y(trn_Y).shape
+    #print 'tst final shape:', m.transform_Y(tst_Y).shape
+    #print '*' * 80
+    ##m.ciw = [4, 2, 1]
+    #m.partial_fit(trn_X, trn_Y)
+    ##m.ci = [0]
+    ##m.partial_fit(trn_X, trn_Y)
+    ##m.ci = [1]
+    ##m.partial_fit(trn_X, trn_Y)
+    ##m.ci = [2]
+    ##m.partial_fit(trn_X, trn_Y)
+
+    #tst_pe = pearson(m.transform_Y(tst_Y).ravel(), m.transform(tst_X).ravel())
+    #print 'tst_pe', tst_pe
+
+
+    #raise
+
+    trn_X_pad_orig = arraypad.pad(trn_X, 512, mode='symmetric')
+    trn_Y_pad_orig = arraypad.pad(trn_Y, 512, mode='symmetric')
+    #misc.imsave('trn_X_pad.png', trn_X_pad)
+    #misc.imsave('trn_Y_pad.png', trn_Y_pad)
     tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
     tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
 
@@ -483,8 +527,6 @@ def main():
     eta0 = 1#2#1#2#1#.2#1#.2#0.8#1#.5#1#0.1
     lr_min = 0.01#1e-3#0.1#1e-3#0.05#1#25#01#05#1#01#05#5e-2
     #gaussian_sigma = 1#0.5
-
-
     for bag in xrange(N_BAGS):
         print "BAGGING ITERATION", (bag + 1)
         ##m = SharpMind(convnet_desc)
@@ -569,14 +611,6 @@ def main():
         m.tst_Y = tst_Y
         m.tst_X = tst_X
         m.partial_fit(trn_X, trn_Y)
-
-        fp = m.footprint
-
-        X3d = view_as_windows(
-            arraypad.pad(tst_X, (fp/2, int(round(fp/2.) - 1)), mode='reflect'),
-            (fp, fp)
-            ).reshape(-1, fp, fp) 
-
         if fb_l is None:
             fb_l = m.fb_l
             W = m.W
@@ -635,34 +669,6 @@ def main():
         print 'FINAL TST_PE:', tst_pe
         print
         print
-
-        print ">>> Computing tst_Y_pred..."
-        tic = time.time()
-        tst_Y_pred = m.transform3d(X3d).reshape(tst_X.shape).astype('float32')
-        toc = time.time()
-        print tst_Y_pred.shape
-        print 'time:', toc - tic
-
-        print ">>> Saving Y_true.tif"
-        tst_Y = tst_Y.astype('f')
-        tst_Y -= tst_Y.min()
-        tst_Y /= tst_Y.max()
-        io.imsave('Y_true.tif', tst_Y, plugin='freeimage')
-        misc.imsave('Y_true.tif.png', tst_Y)
-
-        print ">>> Saving Y_pred..."
-        tst_Y_pred -= tst_Y_pred.min()
-        tst_Y_pred /= tst_Y_pred.max()
-        tst_pe_full = pearson(tst_Y.ravel(), tst_Y_pred.ravel())
-
-        print 'FINAL TST_PE_FULL:', tst_pe_full
-        fname = 'Y_pred.bag%05d.%s.tif' % (bag, tst_pe_full)
-        print fname
-
-        io.imsave(fname, tst_Y_pred, plugin='freeimage')
-        misc.imsave(fname + '.png', tst_Y_pred)
-
-
         print '*' * 80
         #if not FOLLOW_AVG or bag % FOLLOW_AVG > 0:
         if not FOLLOW_AVG:
