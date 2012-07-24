@@ -58,6 +58,9 @@ DEFAULT_LBFGS_PARAMS = dict(
 
 from connectomics_data import get_X_Y
 
+from theano_hacks import theano_memory_hack
+
+
 class SharpMind(object):
 
     def __init__(self, convnet_desc, rng=None):
@@ -143,71 +146,16 @@ class SharpMind(object):
 
     def transform(self, X, verbose=False):
 
-
-        handled_errors = [
-            'Was not able to allocate output!',
-            'expected a CudaNdarray, not None',
-        ]
-
         Xrv = self._reshape_X(X)
 
-        n_patches = Xrv.shape[0]
+        Y_pred, msize_best = theano_memory_hack(
+            func_exp='self.f(*([Xin] + self.fb_l + [self.W])).ravel()',
+            local_vars=locals(),
+            input_exp='Xrv',
+            slice_exp='Xin',
+            )
 
-        # -- super-hacky way of computing all the patches while growing
-        # the size of the batch computed by theano, this is especially
-        # useful to get around memory errors while using the GPU
-        # XXX: report this annoyance to theano-dev
-        if self.msize_best is None:
-            msize = 512
-            msize_best = msize
-            grow_msize = True
-        else:
-            msize = msize_best = self.msize_best
-            grow_msize = False
-
-        Y_pred = None
-        i = 0
-        while i < n_patches:
-            b = time.time()
-            if verbose:
-                print msize, msize_best
-
-            try:
-                Xin = Xrv[i:i+msize]
-                Xout = self.f(*([Xin] + self.fb_l + [self.W])).ravel()
-                msize_best = msize  # it worked with msize
-            except Exception, err:
-                if verbose:
-                    print err.message
-                # hacky way to detect a out of memory error in theano
-                if err.message in handled_errors:
-                    if verbose:
-                        print "!!! Memory error detected: hacking around..."
-                    Xin = Xrv[i:i+msize_best]
-                    Xout = self.f(*([Xin] + self.fb_l + [self.W])).ravel()
-                    grow_msize = False
-                    msize = msize_best
-                else:
-                    raise err
-
-            if Y_pred is None:
-                Y_pred = Xout
-            else:
-                Y_pred = np.concatenate((Y_pred, Xout))
-
-            i += msize
-
-            if verbose:
-                print 't: %.3f, msize_best: %d' % (time.time() - b, msize_best)
-
-            if grow_msize:
-                msize *= 1.8  # grow by 80%
-
-        self.msize_best = msize_best
-
-        assert len(Y_pred) == len(X.flat), (len(Y_pred), len(X.flat))
         Y_pred = Y_pred.reshape(X.shape[:2])
-
         assert Y_pred.dtype == X.dtype
 
         return Y_pred
@@ -384,14 +332,13 @@ class SharpMind(object):
             stop = False
             if (np.array(fb_norms) > th_norm).any() or W_norm > th_norm:
                 print
-                print '!!! Zeroing gradients / loss'
+                print '!!! Zeroing gradients / loss:'
                 grads *= 0
                 loss *= 0
                 stop = True
 
             if stop or (self._n_calls > 0 and self._n_calls % 10 == 0):
-                print
-                #print '=' * 80
+                print 'current_X.shape', current_X.shape
                 print '#calls:', self._n_calls
                 print 'elapsed:', time.time() - self.time_start
                 print 'fb norms:', fb_norms
@@ -427,13 +374,14 @@ class SharpMind(object):
                 params,
                 args=(current_X, current_Y_true),
                 **lbfgs_params)
+            print info
 
             best_fb_l, best_W = unpack_params(best)
 
             if self.lr_exp > 0:
-                lr = 1. * self.eta0 / (1. + self.eta0 * bi) ** self.lr_exp
+                lr = 1. * self.eta0 / (1. + self.eta0 * self.total_n_batches) ** self.lr_exp
             else:
-                lr = 1. / (1. + self.total_n_batches + bi)
+                lr = 1. / (1. + self.total_n_batches)
             lr = np.maximum(lr, self.lr_min)
 
             print 'lr:', lr
@@ -456,18 +404,22 @@ def main():
     #m.trn_X = trn_X
     #m.tst_Y = tst_Y
     #m.tst_X = tst_X
-    maxsize = 128
+    maxsize = None
     N_ITERATIONS = 10
     for iter in xrange(N_ITERATIONS):
+        print '=' * 80
+        print 'Iteration %d' % (iter + 1)
+        print '-' * 80
         m.partial_fit(trn_X[:maxsize, :maxsize], trn_Y[:maxsize, :maxsize],
-                      n_batches=1)
+                      n_batches=1, batch_size=61**2)
         print 'pe...'
-        trn_pe = pearson(trn_Y.ravel(), m.transform(trn_X).ravel())
+        trn_pe = pearson(trn_Y[:128, :128].ravel(), m.transform(trn_X[:128, :128]).ravel())
         print 'trn_pe:', trn_pe
-        tst_pe = pearson(tst_Y.ravel(), m.transform(tst_X).ravel())
+        tst_pe = pearson(tst_Y[:128, :128].ravel(), m.transform(tst_X[:128, :128]).ravel())
         print 'tst_pe:', tst_pe
 
         print 'total_n_batches:', m.total_n_batches
+        print '=' * 80
 
     return
 
