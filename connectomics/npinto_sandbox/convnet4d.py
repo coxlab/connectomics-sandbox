@@ -52,7 +52,7 @@ DEFAULT_LBFGS_PARAMS = dict(
     #factr=1e7,
     factr=1e7,#12,#10,#7,#$12,#7,
     maxfun=1e4,
-    m=1000,
+    m=1e4,
     )
 
 
@@ -99,7 +99,7 @@ class SharpMind(object):
         self.lr_min = 0.01
         self.total_n_batches = 0
 
-    def _safe_X_Y(self, X, Y=None):
+    def _safe_XY(self, X, Y=None):
 
         assert X.ndim == 2 or X.ndim == 3
         assert X.dtype == 'float32'
@@ -118,55 +118,67 @@ class SharpMind(object):
 
             return X, Y
 
-    def _reshape_X(self, X):
+    def _reshape_XY(self, X, Y=None, border='same'):
 
-        X = self._safe_X_Y(X)
+        assert border in ('same', 'valid')
+
+        if Y is None:
+            X = self._safe_XY(X)
+        else:
+            X, Y = self._safe_XY(X, Y)
 
         if X.ndim == 2:
             X = X.reshape(X.shape + (1,))
 
         X_d = X.shape[-1]
-
-        # -- pad
         fp = self.footprint
         pad_shape = fp/2, int(round(fp/2.) - 1)
-        X = np.dstack([
-            arraypad.pad(X[..., i], pad_shape, mode='reflect')
-            for i in xrange(X_d)
-        ])
+
+        if border == 'same':
+            # -- pad
+            X = np.dstack([
+                arraypad.pad(X[..., i], pad_shape, mode='reflect')
+                for i in xrange(X_d)
+            ])
+        elif border == 'valid' and Y is not None:
+            Y = Y[pad_shape[0]:-pad_shape[1],
+                  pad_shape[0]:-pad_shape[1]]
 
         # -- rolling view
         X = view_as_windows(X, (fp, fp, 1))
         X = X.reshape(-1, fp, fp, X_d)
 
         # -- reshape to fit theano's convention
-        X = X.swapaxes(1, 3)
+        X = np.ascontiguousarray(X.transpose(0, 3, 1, 2))
 
-        return X
+        if Y is None:
+            return X
+        else:
+            assert len(X) == np.prod(Y.shape)
+            return X, Y
 
-    def transform(self, X, verbose=False):
+    def transform(self, X, border='same', verbose=False):
 
-        Xrv = self._reshape_X(X)
+        Xrv = self._reshape_XY(X, border=border)
 
         Y_pred, msize_best = theano_memory_hack(
-            func_exp='self.f(*([Xin] + self.fb_l + [self.W])).ravel()',
+            func_exp='self.f(*([slice_vars[0]] + self.fb_l + [self.W])).ravel()',
             local_vars=locals(),
-            input_exp='Xrv',
-            slice_exp='Xin',
+            input_exps=['Xrv'],
             )
 
-        Y_pred = Y_pred.reshape(X.shape[:2])
+        Y_pred = np.concatenate([elt for elt in Y_pred]).reshape(X.shape[:2])
         assert Y_pred.dtype == X.dtype
 
         return Y_pred
 
-    def partial_fit(self, X, Y_true, n_batches=100, batch_size=61*61):
+    def partial_fit(self, X, Y_true, border='valid', n_batches=100, batch_size=61*61):
 
         print '>>> X.shape:', X.shape
         print '>>> Y_true.shape:', Y_true.shape
 
-        X, Y_true = self._safe_X_Y(X, Y_true)
-        X = self._reshape_X(X)
+        X, Y_true = self._safe_XY(X, Y_true)
+        X, Y_true = self._reshape_XY(X, Y_true, border=border)
         Y_true = Y_true.ravel()
 
         print '>>> X.shape (new):', X.shape
@@ -314,21 +326,31 @@ class SharpMind(object):
 
             # unpack parameters
             fb_l, W = unpack_params(params)
-            self.fb_l = fb_l
-            self.W = W
+            #self.fb_l = fb_l
+            #self.W = W
 
             fb_norms = [np.linalg.norm(fb.ravel()) for fb in fb_l]
             W_norm = np.linalg.norm(W)
 
-            # get loss and gradients from theano function
-            out = df(*([current_X] + fb_l + [W, current_Y_true]))
-            loss = out[0]
-            grads = out[1:]
+            # -- get loss and gradients from theano function
+            # using the theano_memory_hack (sorry about that...)
+            local_vars = locals()
+            out, msize_best = theano_memory_hack(
+                'self.df(*([slice_vars[0]] + fb_l + [W, slice_vars[1]]))',
+                local_vars=local_vars,
+                input_exps=('current_X', 'current_Y_true')
+                )
+            loss = np.mean([o[0] for o in out])
+            grads = []
+            for gi in xrange(len(fb_l) + 1):  # filterbanks and W
+                grads += [np.sum([o[gi + 1] for o in out], axis=0)]
 
-            # pack parameters
+            # -- pack parameters
             grad_norms = [np.linalg.norm(g.ravel()) for g in grads]
             grads = np.concatenate([g.ravel() for g in grads])
-            th_norm = 2
+
+            # -- early stopping / heuristic-based regularization
+            th_norm = np.inf
             stop = False
             if (np.array(fb_norms) > th_norm).any() or W_norm > th_norm:
                 print
@@ -339,6 +361,7 @@ class SharpMind(object):
 
             if stop or (self._n_calls > 0 and self._n_calls % 10 == 0):
                 print 'current_X.shape', current_X.shape
+                print 'current_Y_true.shape', current_Y_true.shape
                 print '#calls:', self._n_calls
                 print 'elapsed:', time.time() - self.time_start
                 print 'fb norms:', fb_norms
@@ -348,12 +371,13 @@ class SharpMind(object):
                 #print '=' * 80
 
             self._n_calls += 1
+
             # fmin_l_bfgs_b needs double precision...
             return loss.astype('float64'), grads.astype('float64')
 
         # -- optimize
         lbfgs_params = DEFAULT_LBFGS_PARAMS
-        lbfgs_params['iprint'] = -1
+        #lbfgs_params['iprint'] = -1
 
         # pack parameters
         params = np.concatenate([fb.ravel() for fb in fb_l] + [W.ravel()])
@@ -389,6 +413,7 @@ class SharpMind(object):
                          for i in xrange(len(fb_l))]
 
             self.W = lr * best_W + (1 - lr) * self.W
+
             self.total_n_batches += 1
 
         return self
@@ -398,110 +423,30 @@ def main():
 
     trn_X, trn_Y, tst_X, tst_Y = get_X_Y()
 
-    m = SharpMind(convnet_desc)
+    trn_X_orig = trn_X.copy()
+    trn_Y_orig = trn_Y.copy()
+    tst_X_orig = tst_X.copy()
+    tst_Y_orig = tst_Y.copy()
 
-    #m.trn_Y = trn_Y
-    #m.trn_X = trn_X
-    #m.tst_Y = tst_Y
-    #m.tst_X = tst_X
+    rng = np.random.RandomState(42)
+    m = SharpMind(convnet_desc, rng=rng)
+
     maxsize = None
-    N_ITERATIONS = 10
+    N_ITERATIONS = 100
     for iter in xrange(N_ITERATIONS):
         print '=' * 80
         print 'Iteration %d' % (iter + 1)
         print '-' * 80
-        m.partial_fit(trn_X[:maxsize, :maxsize], trn_Y[:maxsize, :maxsize],
-                      n_batches=1, batch_size=61**2)
-        print 'pe...'
-        trn_pe = pearson(trn_Y[:128, :128].ravel(), m.transform(trn_X[:128, :128]).ravel())
-        print 'trn_pe:', trn_pe
-        tst_pe = pearson(tst_Y[:128, :128].ravel(), m.transform(tst_X[:128, :128]).ravel())
-        print 'tst_pe:', tst_pe
 
-        print 'total_n_batches:', m.total_n_batches
-        print '=' * 80
-
-    return
-
-    trn_X_orig = trn_X.copy()
-    trn_Y_orig = trn_Y.copy()
-    #tst_X_orig = tst_X.copy()
-    #tst_Y_orig = tst_Y.copy()
-
-    #trn_X_pad_orig = arraypad.pad(trn_X, 512, mode='symmetric')
-    #trn_Y_pad_orig = arraypad.pad(trn_Y, 512, mode='symmetric')
-    tst_X_pad = arraypad.pad(tst_X, 512, mode='symmetric')
-    tst_Y_pad = arraypad.pad(tst_Y, 512, mode='symmetric')
-
-    SIZE = 512#*2#*2#3*512-1#1024
-    N_BAGS = 10000
-    FOLLOW_AVG = 10#True#False
-    #DECAY = 1e-3
-
-    start = time.time()
-
-    rng = np.random.RandomState(42)
-    fb_l = None
-    W = None
-    lr_exp = 0#0.75
-    eta0 = 1#2#1#2#1#.2#1#.2#0.8#1#.5#1#0.1
-    lr_min = 0.01#1e-3#0.1#1e-3#0.05#1#25#01#05#1#01#05#5e-2
-    #gaussian_sigma = 1#0.5
-
-
-    for bag in xrange(N_BAGS):
-        print "BAGGING ITERATION", (bag + 1)
-        ##m = SharpMind(convnet_desc)
-        ##SIZE = (b + 1) * SIZE
-        ##trn_X_pad = water(trn_X_pad, sigma=10)
-        ##misc.imsave('trn_X_pad.png', trn_X_pad)
-        ##trn_X_pad = trn_X_pad_orig
-        ##if bag > 0:
-            ##trn_X_pad = water(trn_X_pad, sigma=0.8)
-            ##misc.imsave('trn_X_pad.png', trn_X_pad)
-        #angle = rng.randint(0, 360 + 1)
-        #trn_X_pad = ndimage.rotate(trn_X_pad_orig, angle,
-                                   #prefilter=False, order=0, mode='reflect')
-        #trn_Y_pad = ndimage.rotate(trn_Y_pad_orig, angle,
-                                   #prefilter=False, order=0, mode='reflect')
-        ##trn_X_pad = water(trn_X_pad, sigma=1)
-        #misc.imsave('trn_X_pad.png', trn_X_pad)
-
-        #print '>>> Finding a balanced patch...'
-        #bal = 0#np.inf#1
-        #bal_th = (trn_Y>0).mean()
-        #bal_tol = 0.01
-        #print 'bal_th:', bal_th
-        #print 'bal_tol:', bal_tol
-        #while abs(1 - bal / bal_th) > bal_tol:
-            #j, i = rng.randint(0, len(trn_X_pad)-SIZE+1, size=2)
-            ##print j, i
-            #trn_X = trn_X_pad[j:j+SIZE, i:i+SIZE].copy()
-            #trn_Y = trn_Y_pad[j:j+SIZE, i:i+SIZE].copy()
-            #pos = m.transform_Y(trn_Y)>0
-            ##import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-            ##print pos
-            #bal = 1. * pos.sum() / pos.size
-            ##print abs(1 - bal / bal_th), bal_tol
-        #print 'bal:', bal, j, i
         trn_X = trn_X_orig.copy()
         trn_Y = trn_Y_orig.copy()
+        tst_X = tst_X_orig.copy()
+        tst_Y = tst_Y_orig.copy()
 
-        #if rng.binomial(1, .5):
-            #print 'flip h...'
-            #trn_X = trn_X[:, ::-1]
-            #trn_Y = trn_Y[:, ::-1]
-
-        #if rng.binomial(1, .5):
-            #print 'flip v...'
-            #trn_X = trn_X[::-1, :]
-            #trn_Y = trn_Y[::-1, :]
-
-        #if rng.binomial(1, .5):
-        if bag > 0:
+        if iter > 0:
             if True:
                 print 'swirls...'
-                trn_X, trn_Y = random_swirls(trn_X, trn_Y, rseed=bag)
+                trn_X, trn_Y = random_swirls(trn_X, trn_Y, rseed=iter)
 
             #if rng.binomial(1, .5):
             #if True:
@@ -514,131 +459,62 @@ def main():
             #if rng.binomial(1, .5):
             if True:
                 print 'rotate...'
-                trn_X = ndimage.rotate(trn_X, bag * 90, prefilter=False, order=0)
-                trn_Y = ndimage.rotate(trn_Y, bag * 90, prefilter=False, order=0)
+                trn_X = ndimage.rotate(trn_X, iter * 90, prefilter=False, order=0)
+                trn_Y = ndimage.rotate(trn_Y, iter * 90, prefilter=False, order=0)
 
             #if rng.binomial(1, .5):
             if True:
                 print 'random xform...'
-                trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=bag)
+                trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=iter)
 
-            print trn_X.min(), trn_X.max()
+            print('min=%.2f max=%.2f mean=%.2f std=%.2f'
+                  % (trn_X.min(), trn_X.max(), trn_X.mean(), trn_X.max()))
 
-        #gaussian_sigma = rng.uniform(0, .5)
-        #print 'gaussian_sigma:', gaussian_sigma
-        #trn_X = ndimage.gaussian_filter(trn_X, gaussian_sigma)
+        batch_size = 61 ** 2 #5000
+        m.partial_fit(trn_X[:maxsize, :maxsize], trn_Y[:maxsize, :maxsize],
+                      n_batches=1, batch_size=batch_size)
+        print 'pe...'
 
-        m.trn_Y = trn_Y
-        m.trn_X = trn_X
-        m.tst_Y = tst_Y
-        m.tst_X = tst_X
-        m.partial_fit(trn_X, trn_Y)
+        trn_pe = pearson(
+            trn_Y[:128, :128].ravel(),
+            m.transform(trn_X[:128, :128]).ravel()
+            )
+        print 'trn_pe (current):', trn_pe
 
-        fp = m.footprint
+        trn_pe = pearson(
+            trn_Y_orig[:128, :128].ravel(),
+            m.transform(trn_X_orig[:128, :128]).ravel()
+            )
+        print 'trn_pe (orig):', trn_pe
 
-        X3d = view_as_windows(
-            arraypad.pad(tst_X, (fp/2, int(round(fp/2.) - 1)), mode='reflect'),
-            (fp, fp)
-            ).reshape(-1, fp, fp) 
+        tst_pe = pearson(
+            tst_Y_orig[:128, :128].ravel(),
+            m.transform(tst_X_orig[:128, :128]).ravel()
+            )
+        print 'tst_pe (orig):', tst_pe
 
-        if fb_l is None:
-            fb_l = m.fb_l
-            W = m.W
-        else:
-            if lr_exp > 0:
-                lr = 1. * eta0 / (1. + eta0 * bag) ** lr_exp
-            else:
-                lr = 1. / (1. + bag)
-            lr = np.maximum(lr, lr_min)
-            #lr = lr_min
-            print 'lr:', lr
-            fb_l = [(1 - lr) * fb_l[i] + lr * m.fb_l[i] for i in xrange(len(fb_l))]
-            #fb_l = [fb / np.linalg.norm(fb) for fb in fb_l]
-            W = lr * m.W + (1 - lr) * W
-            #W /= np.linalg.norm(W)
+        print 'total_n_batches:', m.total_n_batches
+        #print '=' * 80
 
-        #if not FOLLOW_AVG:
-        fb_l_bak = deepcopy(m.fb_l)
-        W_bak = deepcopy(m.W)
-        m.fb_l = fb_l
-        m.W = W
-        trn_Y = m.transform_Y(trn_Y)
-        print 'tst_Y.shape:', tst_Y.shape
-        print '*' * 80
-        #tst_pe_l = []
-        rng2 = np.random.RandomState(34)
-        gt_l = None
-        gv_l = None
-        for ti in xrange(64):
-            j, i = rng2.randint(0, len(tst_X_pad)-SIZE+1, size=2)
-            #print j, i
-            tst_X2 = tst_X_pad[j:j+SIZE, i:i+SIZE].copy()
-            tst_Y2 = tst_Y_pad[j:j+SIZE, i:i+SIZE].copy()
-            gt = m.transform_Y(tst_Y2)
-            gv = m.transform(tst_X2)
-            misc.imsave('gt_%02d.png' % ti, gt)
-            misc.imsave('gv_%02d.png' % ti, gv)
-            gt = gt.ravel()
-            gv = gv.ravel()
-            #print gv
-            #print gv.shape
-            #gv = median_filter(gv, radius=2).ravel()
-            if gt_l is None:
-                gt_l = gt
-                gv_l = gv
-            else:
-                gt_l = np.concatenate([gt_l, gt])
-                gv_l = np.concatenate([gv_l, gv])
-            #tst_pe = pearson(m.transform_Y(tst_Y2).ravel(), m.transform(tst_X2).ravel())
-            #print j, i#, '%d tst_pe: %s' % (ti, tst_pe)
-            #tst_pe_l += [tst_pe]
-        #print 'mean:', np.mean(tst_pe_l)
-        tst_pe = pearson(gt, gv)
-        print
-        print
-        print 'FINAL TST_PE:', tst_pe
-        print
-        print
+        #print ">>> Saving Y_true.tif"
+        #tst_Y = tst_Y.astype('f')
+        #tst_Y -= tst_Y.min()
+        #tst_Y /= tst_Y.max()
+        #io.imsave('Y_true.tif', tst_Y, plugin='freeimage')
+        #misc.imsave('Y_true.tif.png', tst_Y)
 
-        print ">>> Computing tst_Y_pred..."
-        tic = time.time()
-        tst_Y_pred = m.transform3d(X3d).reshape(tst_X.shape).astype('float32')
-        toc = time.time()
-        print tst_Y_pred.shape
-        print 'time:', toc - tic
+        #print ">>> Saving Y_pred..."
+        #tst_Y_pred -= tst_Y_pred.min()
+        #tst_Y_pred /= tst_Y_pred.max()
+        #tst_pe_full = pearson(tst_Y.ravel(), tst_Y_pred.ravel())
 
-        print ">>> Saving Y_true.tif"
-        tst_Y = tst_Y.astype('f')
-        tst_Y -= tst_Y.min()
-        tst_Y /= tst_Y.max()
-        io.imsave('Y_true.tif', tst_Y, plugin='freeimage')
-        misc.imsave('Y_true.tif.png', tst_Y)
+        #print 'FINAL TST_PE_FULL:', tst_pe_full
+        #fname = 'Y_pred.bag%05d.%s.tif' % (bag, tst_pe_full)
+        #print fname
 
-        print ">>> Saving Y_pred..."
-        tst_Y_pred -= tst_Y_pred.min()
-        tst_Y_pred /= tst_Y_pred.max()
-        tst_pe_full = pearson(tst_Y.ravel(), tst_Y_pred.ravel())
+        #io.imsave(fname, tst_Y_pred, plugin='freeimage')
+        #misc.imsave(fname + '.png', tst_Y_pred)
 
-        print 'FINAL TST_PE_FULL:', tst_pe_full
-        fname = 'Y_pred.bag%05d.%s.tif' % (bag, tst_pe_full)
-        print fname
-
-        io.imsave(fname, tst_Y_pred, plugin='freeimage')
-        misc.imsave(fname + '.png', tst_Y_pred)
-
-
-        print '*' * 80
-        #if not FOLLOW_AVG or bag % FOLLOW_AVG > 0:
-        if not FOLLOW_AVG:
-            m.fb_l = fb_l_bak
-            m.W = W_bak
-        else:
-            print "FOLLOW AVG !!!!!"
-
-        #if tst_pe > 0.76435:
-            #end = time.time()
-            #print 'time:', end - start
-            #return
 
 if __name__ == '__main__':
     main()
