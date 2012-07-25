@@ -1,10 +1,12 @@
 import time
+import gc
 import numpy as np
 
 
 def theano_memory_hack(func_exp, local_vars, 
                        input_exps=('input',),
-                       msize_start=512, msize_factor=1.8,
+                       msize_best=None,
+                       msize_start=1024, msize_factor=2,
                        verbose=False):
     """Super-hacky way of computing theano expression on large datasets.
 
@@ -26,6 +28,8 @@ def theano_memory_hack(func_exp, local_vars,
     errors_handled = [
         'Was not able to allocate output!',
         'expected a CudaNdarray, not None',
+        'Could not allocate memory on device',
+        'Error allocating',
     ]
 
     locals().update(local_vars)
@@ -35,9 +39,13 @@ def theano_memory_hack(func_exp, local_vars,
     for input_var in input_vars:
         assert len(input_var) == n_elements
 
-    msize = msize_start
-    msize_best = msize
-    grow_msize = True
+    if msize_best is None:
+        msize = msize_start
+        msize_best = msize
+        grow_msize = True
+    else:
+        msize = msize_best
+        grow_msize = False
 
     output = None
     i = 0
@@ -52,21 +60,27 @@ def theano_memory_hack(func_exp, local_vars,
             slice_output = eval(func_exp)
             msize_best = msize  # it worked with msize
         except Exception, err:
+            gc.collect()
             if verbose:
                 print err.message
             # hacky way to detect a out of memory error in theano
-            if err.message in errors_handled:
-                if verbose:
-                    print "!!! Memory error detected: hacking around..."
-                slice_vars = [input_var[i:i+msize_best]
-                              for input_var in input_vars]
-                slice_output = eval(func_exp)
-                grow_msize = False
-                msize = msize_best
-            else:
-                raise err
+            done = False
+            while not done:
+                try:
+                    if np.sum([err.message in error for error in errors_handled]) > 0:
+                        if verbose:
+                            print "!!! Memory error detected: hacking around..."
+                        slice_vars = [input_var[i:i+msize_best]
+                                      for input_var in input_vars]
+                        slice_output = eval(func_exp)
+                        grow_msize = False
+                        msize = msize_best
+                        done = True
+                except Exception, err:
+                    print err
+                    msize_best /= msize_factor
+                    msize = msize_best
 
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
         if output is None:
             output = [slice_output]
         else:
