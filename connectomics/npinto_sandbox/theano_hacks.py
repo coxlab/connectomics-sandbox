@@ -77,7 +77,6 @@ def theano_memory_hack(func_exp, local_vars,
                         msize = msize_best
                         done = True
                 except Exception, err:
-                    print err
                     msize_best /= msize_factor
                     msize = msize_best
 

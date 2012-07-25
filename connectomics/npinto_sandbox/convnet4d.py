@@ -34,9 +34,9 @@ theano.config.warn.sum_div_dimshuffle_bug = False
 from xform import water
 
 convnet_desc = [
-    (8, 7, 2),
-    (8, 5, 3),
-    (8, 7, 2),
+    (16, 7, 2),
+    (16, 5, 2),
+    (16, 7, 2),
     #(32, 5, 2),
     #(4, 5, 2),
     #(48, 3, 2),
