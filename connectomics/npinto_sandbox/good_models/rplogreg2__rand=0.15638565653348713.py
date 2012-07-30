@@ -19,8 +19,12 @@ from bangmetric.correlation import  pearson
 from bangmetric.isbi12 import rand_error
 from skimage.util.shape import view_as_windows
 from bangreadout import zmuv_rows_inplace
+from skimage.filter import median_filter
 
 import time
+
+from skimage import io
+io.use_plugin('freeimage')
 
 from scipy.optimize import fmin_l_bfgs_b
 
@@ -69,6 +73,7 @@ class RPLogReg2(object):
         learning = self.learning
 
         if lnorm_size is not None:
+            # TODO: arraypad
             X2 = filter_pad2d(np.atleast_3d(X), lnorm_size)
             X2 = np.dstack((
                 lcdnorm3(X2, lnorm_size, contrast=False),
@@ -78,6 +83,7 @@ class RPLogReg2(object):
         X2 = filter_pad2d(X2, rf_size[:2])
         X2 = view_as_windows(X2, rf_size)
         X2 = X2.reshape(np.prod(X.shape[:2]), -1)
+
         X = X2
 
         print 'zero-mean / unit-variance'
@@ -98,7 +104,6 @@ class RPLogReg2(object):
                 fb = self.fb
             print 'dot...'
             Xnew = np.dot(X, fb) ** 2.
-            print Xnew.shape
 
             X = np.column_stack((X, Xnew))
 
@@ -169,10 +174,8 @@ class RPLogReg2(object):
             w = vars[:w_size]
             b = vars[w_size:]
             # get loss and gradients from theano function
-            #Y_pred, loss, dloss_W, dloss_b = _f_df(X, Y_true, w, b)
             Y_pred, loss, dloss_w, dloss_b = _f_df(X, Y_true, w, b[0])
             try:
-                #print 'ap', average_precision(Y_true.ravel(), Y_pred[:, 1].ravel())
                 print 'pe =', pearson(Y_true.ravel(), Y_pred.ravel())
             except (AssertionError, ValueError):
                 pass
@@ -204,16 +207,12 @@ class RPLogReg2(object):
 
 def main():
 
-    #rf_size = (51, 51)
     rf_size = (21, 21)
     lnorm_size = (11, 11)
     n_filters = 512
-    #learning = 'randn'
     learning = 'imprint'
-    #DEBUG = False
     N_IMGS = 1
     N_IMGS_VAL = 1
-    #pca_n_components = 100
 
     np.random.seed(42)
 
@@ -221,9 +220,6 @@ def main():
         iprint=1,
         factr=1e12,
         maxfun=1000,
-        #maxfun=2,
-        #factr=1e7,
-        #maxfun=1e4,
         )
 
     print 'training image'
@@ -234,8 +230,6 @@ def main():
             home, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % i)
         print trn_fname
         trn_X = (misc.imread(trn_fname, flatten=True) / 255.).astype('f')
-        #trn_X -= trn_X.min()
-        #trn_X /= trn_X.max()
         trn_X -= trn_X.mean()
         trn_X /= trn_X.std()
         trn_Y = (misc.imread(trn_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
@@ -253,8 +247,6 @@ def main():
             home, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-%02d.png' % k)
         print val_fname
         val_X = (misc.imread(val_fname, flatten=True) / 255.).astype('f')
-        #val_X -= val_X.min()
-        #val_X /= val_X.max()
         val_X -= val_X.mean()
         val_X /= val_X.std()
         val_Y = (misc.imread(val_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
@@ -268,8 +260,6 @@ def main():
     tst_fname = path.join(home, 'datasets/connectomics/isbi2012/pngs/train-volume.tif-29.png')
     print tst_fname
     tst_X = (misc.imread(tst_fname, flatten=True) / 255.).astype('f')
-    #tst_X -= tst_X.min()
-    #tst_X /= tst_X.max()
     tst_X -= tst_X.mean()
     tst_X /= tst_X.std()
     tst_Y = (misc.imread(tst_fname.replace('volume', 'labels'), flatten=True) > 0).astype('f')
@@ -280,71 +270,19 @@ def main():
                      n_filters=n_filters,
                      lbfgs_params=lbfgs_params,
                      learning=learning,
-                     #pca_n_components=pca_n_components,
                     )
     start = time.time()
-    #trn_X -= trn_X.min()
-    #trn_Y = trn_Y - (trn_X * trn_X <= 0.1)
     print 'model...'
-    from skimage.filter import median_filter
-
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-    #trn_X = median_filter(trn_X)
     mdl1.fit(trn_X, trn_Y)
-    #trn_X1 = mdl1.predict(trn_X)[..., 0]
+    Y_pred = mdl1.predict(tst_X)[..., 0]
+    Y_pred = median_filter(Y_pred, radius=3)
 
-    if 0:
-        fs = 11
-        from bangreadout import LBFGSLogisticClassifier
-        val_Y_pred = mdl1.predict(val_X)
-        val_Y_pred = np.dstack((val_X[..., np.newaxis], val_Y_pred))
-        val_Y_pred_rv = view_as_windows(filter_pad2d(val_Y_pred, (fs, fs)), (fs, fs, 1))
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-        val_Y_pred = val_Y_pred_rv.reshape(np.prod(val_Y_pred.shape[:2]), -1)
-        n_ff = val_Y_pred.shape[-1]
-
-        logreg = LBFGSLogisticClassifier(n_features=val_Y_pred.shape[-1])
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-
-        zmuv_rows_inplace(val_Y_pred.T)
-        logreg.fit(val_Y_pred, val_Y.ravel()>0)
-
-        Y_pred1 = mdl1.predict(tst_X)
-        #zmuv_rows_inplace(Y_pred1.T)
-        Y_pred1 = np.dstack((tst_X[..., np.newaxis], Y_pred1))
-        Y_pred2 = view_as_windows(filter_pad2d(Y_pred1, (fs, fs)), (fs, fs, 1)).reshape(-1, n_ff)
-        #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-        zmuv_rows_inplace(Y_pred2.T)
-        Y_pred2 = logreg.transform(Y_pred2).reshape(512, 512)
-        Y_pred = Y_pred2
-    else:
-        Y_pred = mdl1.predict(tst_X)[..., 0]
-        Y_pred = median_filter(Y_pred, radius=3)
-
-    #trn_X1 = mdl1.predict(trn_X)[..., 0]
-
-    #mdl2 = RPLogReg1(rf_size=rf_size,
-                     #lnorm_size=lnorm_size,
-                     #n_filters=n_filters)
-    #mdl2 = RPLogReg1(rf_size=rf_size,
-                     #lnorm_size=lnorm_size,
-                     #n_filters=n_filters)
-    #mdl2.fit(trn_X1, trn_Y.astype(bool))
-
-    #Y_pred = mdl2.predict(mdl1.predict(tst_X)[..., 0])
-    #print 'pca...'
-    #tst_X = pca.transform(tst_X)
-    #Y_pred = mdl1.predict(tst_X)[..., 0]
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
-    #Y_pred = Y_pred + (tst_X * tst_X <= 0.1)
     Y_true = tst_Y.copy()
     print 'pe =', pearson(Y_true.ravel(), Y_pred.ravel())
     end = time.time()
 
     print end-start
 
-    from skimage import io
-    io.use_plugin('freeimage')
     Y_pred -= Y_pred.min()
     Y_pred /= Y_pred.max()
     offset = 32
@@ -355,7 +293,6 @@ def main():
     io.imsave('Y_pred.tif', Y_pred, plugin='freeimage')
     io.imsave('Y_true.tif', Y_true, plugin='freeimage')
 
-    #import IPython; ipshell = IPython.embed; ipshell(banner1='ipshell')
 
 if __name__ == '__main__':
     main()
