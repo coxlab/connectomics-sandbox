@@ -26,6 +26,7 @@ io.use_plugin('freeimage')
 HOME = environ.get("HOME")
 
 from bangmetric import *
+from bangmetric.isbi12 import *
 
 #l = (misc.lena() / 1.).astype('f')
 print theano.config.openmp
@@ -34,9 +35,13 @@ theano.config.warn.sum_div_dimshuffle_bug = False
 from xform import water
 
 convnet_desc = [
-    (16, 7, 2),
-    (16, 5, 2),
-    (16, 7, 2),
+    (8, 5, 2),
+    (4, 4, 2),
+    (8, 4, 2),
+    (8, 4, 2),
+    #(16, 7, 2),
+    #(16, 7, 2),
+    #(16, 7, 2),
     #(32, 5, 2),
     #(4, 5, 2),
     #(48, 3, 2),
@@ -268,11 +273,11 @@ class SharpMind(object):
         # -- multi-layer perceptron (mlp)
         W_size = fb_l[-1].shape[0]
         t_Y_pred = tensor.dot(t_output, t_W[:-1]) + t_W[-1]
-        sigmoid_factor = 4
+        sigmoid_factor = 1#4
         t_Y_pred = 1. / (1. + tensor.exp(-sigmoid_factor * t_Y_pred))
 
         # -- loss
-        epsilon = 0.1
+        epsilon = 0#.1
         l2_regularization = 0
         t_loss = tensor.maximum(0, ((t_Y_pred - t_Y_true) ** 2.) - epsilon)
         t_loss = t_loss ** 2.
@@ -475,8 +480,8 @@ class SharpMind(object):
 
 def main():
 
-    #trn_X, trn_Y, val_X, val_Y, tst_X, tst_Y = get_X_Y()
-    trn_X, trn_Y, tst_X, tst_Y, val_X, val_Y = get_X_Y()
+    trn_X, trn_Y, val_X, val_Y, tst_X, tst_Y = get_X_Y()
+    #trn_X, trn_Y, tst_X, tst_Y, val_X, val_Y = get_X_Y()
 
     trn_X_orig = trn_X.copy()
     trn_Y_orig = trn_Y.copy()
@@ -493,7 +498,7 @@ def main():
     rng = np.random.RandomState(42)
     m = SharpMind(convnet_desc, rng=rng)
 
-    batch_size = 2000#1e5#5000#1000#10000#61**2#1e3
+    batch_size = 10000#1e5#5000#1000#10000#61**2#1e3
     batch_size_factor = 1.1#1.2
     batch_size_max = 1e5
     n_batches = 1#0
@@ -524,50 +529,37 @@ def main():
             trn_X /= trn_X.std()
 
             if rng.binomial(1, .5):
-            #if True:
                 print 'rotate...'
                 trn_X = ndimage.rotate(trn_X, iter * 90, prefilter=False, order=0)
                 trn_Y = ndimage.rotate(trn_Y, iter * 90, prefilter=False, order=0)
 
-            if rng.binomial(1, .5):
-            #if True:
-                print 'random xform...'
-                trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=iter)
+            #if rng.binomial(1, .5):
+                #print 'random xform...'
+                #trn_X, trn_Y = get_random_transform(trn_X, trn_Y, rseed=iter)
 
             print('min=%.2f max=%.2f mean=%.2f std=%.2f'
                   % (trn_X.min(), trn_X.max(), trn_X.mean(), trn_X.std()))
 
         batch_size = min(int(batch_size_factor * batch_size), batch_size_max)
-        m.lr_min = 0.1#1.0
+        m.lr_min = 0.01#1.0
         m.partial_fit(trn_X, trn_Y,
                       n_batches=n_batches, batch_size=batch_size)
         print 'pe...'
-        if iter == 0:
-            m.total_n_batches = 0
-
-        fp = m.footprint
-        pad_shape = fp/2, int(round(fp/2.) - 1)
-
-        #trn_pe_curr = pearson(
-            #trn_Y.ravel(),
-            #m.transform(trn_X).ravel()
-            #)
-
-        #trn_pe = pearson(
-            #trn_Y_orig.ravel(),
-            #m.transform(trn_X_orig).ravel()
-            #)
+        #if iter == 0:
+            #m.total_n_batches = 0
 
         start = time.time()
         tst_Y_true = gt = tst_Y_orig
         tst_Y_pred = gv = median_filter(m.transform(tst_X_orig), 2)
         tst_pe = pearson(gt.ravel(), gv.ravel())
+        tst_rd = rand_error(gt, gv)
         val_pe = pearson(val_Y.ravel(), m.transform(val_X_orig).ravel())
         ttime = time.time() - start
         print
         print
         print 'FINAL VAL_PE (orig):', val_pe
         print 'FINAL TST_PE (orig):', tst_pe
+        print 'FINAL TST_RD (orig):', tst_rd
         print 'time:', ttime
         print
         print
@@ -582,7 +574,7 @@ def main():
         misc.imsave('Y_true.tif.png', tst_Y_true)
 
         print ">>> Saving Y_pred..."
-        fname = 'Y_pred.iter=%05d.%s.tif' % (iter, tst_pe)
+        fname = 'Y_pred.iter=%05d.%s.tif' % (iter, tst_rd)
         print fname
         tst_Y_pred -= tst_Y_pred.min()
         tst_Y_pred /= tst_Y_pred.max()

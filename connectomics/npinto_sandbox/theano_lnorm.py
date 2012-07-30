@@ -17,7 +17,9 @@ from sthor.operation.lnorm import (
 def theano_lsum(t_arr_in, neighborhood):
     ker = np.ones(neighborhood, dtype='float32')
 
-    nnet.conv2d()
+    nnet.conv2d(t_arr_in,
+                kerns,
+                image_shape=
                 #conv.conv2d(x,
                     #kerns,
                     #image_shape=x_shp,
