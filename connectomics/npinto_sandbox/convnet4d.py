@@ -36,9 +36,9 @@ from xform import water
 
 convnet_desc = [
     (8, 5, 2),
-    (4, 4, 2),
-    (8, 4, 2),
-    (8, 4, 2),
+    (8, 5, 2),
+    (8, 5, 2),
+    #(8, 4, 2),
     #(16, 7, 2),
     #(16, 7, 2),
     #(16, 7, 2),
@@ -247,7 +247,7 @@ class SharpMind(object):
                              )
 
             # -- activ
-            #t_A = tensor.tanh(t_F)
+            #t_A = 1.7159 * tensor.tanh(0.6666 * t_F)
             t_A = tensor.maximum(t_F, 0)
             #t_A = tensor.clip(t_F, 0, 1)
 
@@ -278,7 +278,7 @@ class SharpMind(object):
 
         # -- loss
         epsilon = 0#.1
-        l2_regularization = 0
+        l2_regularization = 1e-2
         t_loss = tensor.maximum(0, ((t_Y_pred - t_Y_true) ** 2.) - epsilon)
         t_loss = t_loss ** 2.
         t_loss = t_loss.mean()
