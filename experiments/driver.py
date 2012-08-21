@@ -9,7 +9,7 @@
 from get_isbi_images import get_images
 from bangmetric import precision_recall
 from bangmetric import correlation
-from bangmetric.isbi12 import pixel_error, rand_error, warp_error
+from bangmetric.wildwest.isbi12 import pixel_error, rand_error, warp_error
 
 # -- basic imports
 import sys

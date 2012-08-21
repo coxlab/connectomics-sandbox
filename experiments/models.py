@@ -12,7 +12,7 @@ from pprint import pprint
 
 # -- customs imports
 from bangreadout.sqhinge import AverageLBFGSSqHingeClassifier as Classifier
-from bangmetric.isbi12 import warp2d
+from bangmetric.wildwest.isbi12 import warp2d
 from sthor.model.slm import SequentialLayeredModel
 from sthor.model.slm import _get_in_shape
 from sthor.util.arraypad import pad
