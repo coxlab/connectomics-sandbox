@@ -8,7 +8,7 @@ from scipy.ndimage import rotate
 
 # -- path to the ISBI PNG images
 ENV_VAR = "ISBI_PATH"
-DEFAULT_ISBI_PATH = "/home/poilvert/connectomics/isbi_dataset/"
+DEFAULT_ISBI_PATH = ""
 
 if ENV_VAR not in environ:
     if not path.exists(DEFAULT_ISBI_PATH):

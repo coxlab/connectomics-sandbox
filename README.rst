@@ -13,6 +13,19 @@ recent version of Fiji.
 The repository ``bangmetric`` contains a set of Python wrappers to use the metrics provided
 by Fiji from within a Python program. So there is no bindings or anything else to create.
 
+You will also need to have some core Python packages installed. The core packages are ::
+
+    numpy
+    scipy
+    scikits-image
+    theano
+
+For reasons of speed, you will need a *fast* numpy, which means that you should either install
+numpy against **ATLAS** or **Intel MKL** for fast linear algebra. As for theano, once you
+have ``numpy`` and ``scipy`` installed, you can simply type ::
+
+    pip install -I --no-deps theano
+
 Installation Steps
 ==================
 
