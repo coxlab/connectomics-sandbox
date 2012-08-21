@@ -1,0 +1,8 @@
+*egg*
+*.pyc
+~*
+*tar.gz
+*tgz
+*.swp
+iterate*
+*.sh
