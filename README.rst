@@ -1,3 +1,18 @@
+Requirements
+============
+
+In order to compute the metrics associated with the ISBI challenge, you need to install a
+recent version of Fiji.
+
+1. Go to http://fiji.sc/wiki/index.php/Downloads
+
+2. Once downloaded, decompress the archive
+
+3. Start Fiji with the executable provided, and update Fiji
+
+The repository ``bangmetric`` contains a set of Python wrappers to use the metrics provided
+by Fiji from within a Python program. So there is no bindings or anything else to create.
+
 Installation Steps
 ==================
 
@@ -61,7 +76,7 @@ at the beginning of the *process* function. Then execute the code as follows :
 
     $ python driver.py models.process
 
-the metric values should be close to something like :
+the metric values should be something around these values :
 
     mean Average Precision:  0.987
     mean Pearson coef.    :  0.721
@@ -136,5 +151,5 @@ function must take the ``tasks`` as first argument (plus potentially as many as
 one wants as extra arguments). Then it must return three outputs. The first two
 of which must be 4D tensors of shape *[ni, h, w, nf]*. Possibly, if no ground
 truth images were present for the testing images, ``output_true`` should be an
-empty list of array. The last output can be anything that the user would like
+empty list or array. The last output can be anything that the user would like
 to store in a Pickle or a MongoDB database.

@@ -1,12 +1,29 @@
 import matplotlib
 matplotlib.use('Agg')
 
-from os import path
+from os import path, environ
+import inspect
 import skimage.io as io
 from scipy.ndimage import rotate
 
 # -- path to the ISBI PNG images
-base_path = "/home/poilvert/connectomics/isbi_dataset/"
+ENV_VAR = "ISBI_PATH"
+DEFAULT_ISBI_PATH = "/home/poilvert/connectomics/isbi_dataset/"
+
+if ENV_VAR not in environ:
+    if not path.exists(DEFAULT_ISBI_PATH):
+        raise ValueError(
+            "Could not find the path to the ISBI dataset!"
+            "Please set the %s environment variable or set"
+            " the default path in %s" % (ENV_VAR,
+            path.abspath(inspect.getfile(inspect.currentframe()))))
+    else:
+        ISBI_PATH = DEFAULT_ISBI_PATH
+else:
+    ISBI_PATH = environ.get(ENV_VAR)
+
+if not path.exists(ISBI_PATH):
+    raise ValueError("%s does not exist" % ISBI_PATH)
 
 
 def get_images(trn_img_idx=[0, 1, 2], tst_img_idx=[29], rotate_img=False,
@@ -57,7 +74,7 @@ def get_images(trn_img_idx=[0, 1, 2], tst_img_idx=[29], rotate_img=False,
 
         print ' image %3i' % idx
 
-        fname = path.join(base_path, 'train-volume.tif-%02d.png' % idx)
+        fname = path.join(ISBI_PATH, 'train-volume.tif-%02d.png' % idx)
 
         trn_X = io.imread(fname, as_grey=True).astype('f')
         trn_X -= trn_X.mean()
@@ -81,9 +98,9 @@ def get_images(trn_img_idx=[0, 1, 2], tst_img_idx=[29], rotate_img=False,
         print ' image %3i' % idx
 
         if use_true_tst_img:
-            fname = path.join(base_path, 'test-volume.tif-%02d.png' % idx)
+            fname = path.join(ISBI_PATH, 'test-volume.tif-%02d.png' % idx)
         else:
-            fname = path.join(base_path, 'train-volume.tif-%02d.png' % idx)
+            fname = path.join(ISBI_PATH, 'train-volume.tif-%02d.png' % idx)
 
         tst_X = io.imread(fname, as_grey=True).astype('f')
         tst_X -= tst_X.mean()
