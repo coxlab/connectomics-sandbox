@@ -6,7 +6,7 @@ import skimage.io as io
 from scipy.ndimage import rotate
 
 # -- path to the ISBI PNG images
-base_path = "/share/datasets/isbi2012/pngs"
+base_path = "/home/poilvert/connectomics/isbi_dataset/"
 
 
 def get_images(trn_img_idx=[0, 1, 2], tst_img_idx=[29], rotate_img=False,

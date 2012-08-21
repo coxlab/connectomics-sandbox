@@ -22,8 +22,8 @@ from pymongo import Connection
 
 # -- Default parameters
 DEFAULT_PKL_FNAME = '<my_model.pkl>'
-DEFAULT_TRN_IDX = range(26)
-DEFAULT_TST_IDX = range(26, 30)
+DEFAULT_TRN_IDX = [0, 1, 2]
+DEFAULT_TST_IDX = [29]
 DEFAULT_SAVE = False
 DEFAULT_ROTATE = False
 DEFAULT_USE_TRUE_TST_IMG = False
