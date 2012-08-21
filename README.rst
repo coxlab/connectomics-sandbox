@@ -54,7 +54,8 @@ Installation Steps
     $ cd /path/to/connectomics/experiments
     $ vim get_isbi_images.py
 
-   and put the path in the variable *base_path*
+   and put the path in the variable *base_path*. Equivalently, you can define an environment
+   variable ``ISBI_PATH`` and exporting the proper path into that variable.
 
 Testing your installation
 =========================
