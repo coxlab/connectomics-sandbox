@@ -1,6 +1,48 @@
 Requirements
 ============
 
+General-purpose packages
+------------------------
+
+As in most Python-based codes, you will need to have working versions of ::
+
+    numpy
+    scipy
+    numexpr
+    pip
+
+Reading images and Machine Learning
+-----------------------------------
+
+For reading images, and doing some machine learning, you will need to install ::
+
+    scikits-image
+    theano
+    scikits-learn
+
+``scikits-image`` will also need to have the ``freeimage`` plugin installed. On Gentoo
+Linux, the following command should work ::
+
+    emerge media-libs/freeimage
+
+On Ubuntu Linux, something like this instead should work ::
+
+    sudo apt-get install libfreeimage3
+
+Database-related packages
+-------------------------
+
+Finally, in order to be able to dump data in a MongoDB database, you will need ::
+
+    pymongo
+
+If you dump your data onto another computer, you don't need to have MongoDB installed
+on your machine, as long as it is installed on the "server" where you dump your data
+with ``pymongo``.
+
+Computing metrics
+-----------------
+
 In order to compute the metrics associated with the ISBI challenge, you need to install a
 recent version of Fiji.
 
@@ -10,8 +52,11 @@ recent version of Fiji.
 
 3. Start Fiji with the executable provided, and update Fiji
 
-The repository ``bangmetric`` contains a set of Python wrappers to use the metrics provided
-by Fiji from within a Python program. So there is no bindings or anything else to create.
+I would advise to download and install ``Fiji`` on your own machine with a Graphical User
+Interface. Because the "update" to Fiji need a GUI. Once you update Fiji, you can then do
+a safe copy onto the machine on which you will perform the calculations. This is quite
+useful in particular if you need a working version of ``Fiji`` onto a cluster that generally
+does not have a graphical interface.
 
 Installation Steps
 ==================
@@ -122,7 +167,7 @@ The driver is a front-end program that will take a python module of yours
 (that is responsible for the processing of the connectomics images and for
 producing boundary detection maps), and use that function internally.
 
-The standard command-line is ::
+The standard command to use the driver with your custom code is ::
 
     $ python driver.py mymodule.myfunction myfunction_args <driver_args>
 
