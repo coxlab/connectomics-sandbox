@@ -6,7 +6,8 @@
 # Licence: BSD
 
 # -- external modules
-from get_isbi_images import get_images
+from get_isbi_images import get_images as isbi_images
+from get_hp_images import get_images as hp_images
 from bangmetric import precision_recall
 from bangmetric import correlation
 from bangmetric.wildwest.isbi12 import pixel_error, rand_error, warp_error
@@ -21,7 +22,7 @@ import argparse
 from pymongo import Connection
 
 # -- Default parameters
-DEFAULT_PKL_FNAME = '<my_model.pkl>'
+DEFAULT_PKL_FNAME = 'saved_data.pkl'
 DEFAULT_TRN_IDX = [0, 1, 2]
 DEFAULT_TST_IDX = [29]
 DEFAULT_SAVE = False
@@ -62,6 +63,11 @@ def main():
                         default=DEFAULT_TST_IDX,
                         help='z coordinate of testing images to consider',
                         )
+    parser.add_argument('--hp_dataset', action='store_true',
+                        default=False,
+                        dest='hp_dataset',
+                        help='flag to select Hans Pfister dataset instead of' \
+                             + ' ISBI')
     parser.add_argument('--save', action='store_true',
                         default=DEFAULT_SAVE,
                         dest='save',
@@ -80,15 +86,24 @@ def main():
     args = parser.parse_args()
 
     # -- building the train/test data (with caching)
-    key = (tuple(args.trn_img_idx), tuple(args.tst_img_idx))
-    if key not in CACHE:
-        tasks = get_images(trn_img_idx=args.trn_img_idx,
-                           tst_img_idx=args.tst_img_idx,
-                           rotate_img=DEFAULT_ROTATE,
-                           use_true_tst_img=DEFAULT_USE_TRUE_TST_IMG)
-        CACHE[key] = tasks
+    if args.hp_dataset:
+        key = (tuple(args.trn_img_idx), tuple(args.tst_img_idx), 'hp')
+        if key not in CACHE:
+            tasks = hp_images(trn_img_idx=args.trn_img_idx,
+                              tst_img_idx=args.tst_img_idx)
+            CACHE[key] = tasks
+        else:
+            tasks = CACHE[key]
     else:
-        tasks = CACHE[key]
+        key = (tuple(args.trn_img_idx), tuple(args.tst_img_idx), 'isbi')
+        if key not in CACHE:
+            tasks = isbi_images(trn_img_idx=args.trn_img_idx,
+                                tst_img_idx=args.tst_img_idx,
+                                rotate_img=DEFAULT_ROTATE,
+                                use_true_tst_img=DEFAULT_USE_TRUE_TST_IMG)
+            CACHE[key] = tasks
+        else:
+            tasks = CACHE[key]
 
     # -- call processing function
     start = time.time()

@@ -1,6 +1,48 @@
 Requirements
 ============
 
+General-purpose packages
+------------------------
+
+As in most Python-based codes, you will need to have working versions of ::
+
+    numpy
+    scipy
+    numexpr
+    pip
+
+Reading images and Machine Learning
+-----------------------------------
+
+For reading images, and doing some machine learning, you will need to install ::
+
+    scikits-image
+    theano
+    scikits-learn
+
+``scikits-image`` will also need to have the ``freeimage`` plugin installed. On Gentoo
+Linux, the following command should work ::
+
+    emerge media-libs/freeimage
+
+On Ubuntu Linux, something like this instead should work ::
+
+    sudo apt-get install libfreeimage3
+
+Database-related packages
+-------------------------
+
+Finally, in order to be able to dump data in a MongoDB database, you will need ::
+
+    pymongo
+
+If you dump your data onto another computer, you don't need to have MongoDB installed
+on your machine, as long as it is installed on the "server" where you dump your data
+with ``pymongo``.
+
+Computing metrics
+-----------------
+
 In order to compute the metrics associated with the ISBI challenge, you need to install a
 recent version of Fiji.
 
@@ -10,8 +52,23 @@ recent version of Fiji.
 
 3. Start Fiji with the executable provided, and update Fiji
 
-The repository ``bangmetric`` contains a set of Python wrappers to use the metrics provided
-by Fiji from within a Python program. So there is no bindings or anything else to create.
+I would advise to download and install ``Fiji`` on your own machine with a Graphical User
+Interface. Because the "update" to Fiji need a GUI. Once you update Fiji, you can then do
+a safe copy onto the machine on which you will perform the calculations. This is quite
+useful in particular if you need a working version of ``Fiji`` onto a cluster that generally
+does not have a graphical interface.
+
+Specific to Hans Pfister dataset
+--------------------------------
+
+If you want to perform some experiments on Hans Pfister dataset instead of ISBI, you should
+add the following dependency on top of the dependencies defined in *Installation Steps* ::
+
+    git clone git@github.com:coxlab/coxlabdata.git
+    cd coxlabdata && python setup.py develop
+
+This will allow you to use ``get_hp_images`` and use Hans Pfister's data in the driver.
+
 
 You will also need to have some core Python packages installed. The core packages are ::
 
@@ -135,7 +192,7 @@ The driver is a front-end program that will take a python module of yours
 (that is responsible for the processing of the connectomics images and for
 producing boundary detection maps), and use that function internally.
 
-The standard command-line is ::
+The standard command to use the driver with your custom code is ::
 
     $ python driver.py mymodule.myfunction myfunction_args <driver_args>
 
@@ -169,3 +226,21 @@ of which must be 4D tensors of shape *[ni, h, w, nf]*. Possibly, if no ground
 truth images were present for the testing images, ``output_true`` should be an
 empty list or array. The last output can be anything that the user would like
 to store in a Pickle or a MongoDB database.
+
+Some tips on using the codes on computing clusters
+==================================================
+
+When using the code on a cluster of computers, it happens that ``theano`` wants
+to dump all its compiled sources into a **cache** directory, which by default, is
+set to be in your ``home`` directory. The problem is that when many nodes of the
+cluster want to compile their theano expressions, they all share that common
+cache directory, and this causes a lot of reading/writing which slows down
+tremendously the system, especially since your ``home`` folder will be shared by
+the NFS system of the cluster.
+
+In order to avoid all this, clusters generally provide *local scratch* directories
+on each node. These directories are *local* to the node, which means that they are
+not on the NFS system. The line that calls the driver to perform the calculation
+you want should then look something like this ::
+
+    THEANO_FLAGS='base_compiledir=/path/to/local/scratch' python driver.py <rest of command here>

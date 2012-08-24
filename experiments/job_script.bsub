@@ -1,0 +1,28 @@
+#!/bin/bash
+
+#BSUB -J test
+#BSUB -o test.out
+#BSUB -e test.err
+#BSUB -W 23:00
+#BSUB -q normal_serial
+#BSUB -n 8
+#BSUB -R "rusage[mem=12000]"
+#BSUB -R "span[ptile=8]"
+
+
+source ~/.bashrc
+
+~/gentoo/startprefix
+
+workon connectomics
+
+SCRATCH_DIR="/scratch/poilvert/theano_cache"
+mkdir -p $SCRATCH_DIR
+
+WORKING_DIR="/n/home07/poilvert/.virtualenvs/connectomics/connectomics-sandbox/experiments"
+
+cd $WORKING_DIR
+
+export OMP_NUM_THREADS=8
+
+THEANO_FLAGS='base_compiledir=/scratch/poilvert/theano_cache' python driver.py models.process --save --no_mongo_store
