@@ -201,3 +201,21 @@ of which must be 4D tensors of shape *[ni, h, w, nf]*. Possibly, if no ground
 truth images were present for the testing images, ``output_true`` should be an
 empty list or array. The last output can be anything that the user would like
 to store in a Pickle or a MongoDB database.
+
+Some tips on using the codes on computing clusters
+==================================================
+
+When using the code on a cluster of computers, it happens that ``theano`` wants
+to dump all its compiled sources into a **cache** directory, which by default, is
+set to be in your ``home`` directory. The problem is that when many nodes of the
+cluster want to compile their theano expressions, they all share that common
+cache directory, and this causes a lot of reading/writing which slows down
+tremendously the system, especially since your ``home`` folder will be shared by
+the NFS system of the cluster.
+
+In order to avoid all this, clusters generally provide *local scratch* directories
+on each node. These directories are *local* to the node, which means that they are
+not on the NFS system. The line that calls the driver to perform the calculation
+you want should then look something like this ::
+
+    THEANO_FLAGS='base_compiledir=/path/to/local/scratch' python driver.py <rest of command here>
