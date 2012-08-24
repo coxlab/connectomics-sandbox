@@ -29,6 +29,10 @@ On Ubuntu Linux, something like this instead should work ::
 
     sudo apt-get install libfreeimage3
 
+You can install ``theano`` directly into your virtual environment with ::
+
+    pip install -I --no-deps theano
+
 Database-related packages
 -------------------------
 
@@ -69,19 +73,6 @@ add the following dependency on top of the dependencies defined in *Installation
 
 This will allow you to use ``get_hp_images`` and use Hans Pfister's data in the driver.
 
-
-You will also need to have some core Python packages installed. The core packages are ::
-
-    numpy
-    scipy
-    scikits-image
-    theano
-
-For reasons of speed, you will need a *fast* numpy, which means that you should either install
-numpy against **ATLAS** or **Intel MKL** for fast linear algebra. As for theano, once you
-have ``numpy`` and ``scipy`` installed, you can simply type ::
-
-    pip install -I --no-deps theano
 
 Installation Steps
 ==================
