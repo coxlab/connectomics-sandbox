@@ -44,8 +44,8 @@ def main():
     program front-end with command-line options
     """
 
-    parser = argparse.ArgumentParser(description='driver program for ISBI' +
-                                     ' challenge')
+    parser = argparse.ArgumentParser(description='driver program for' + \
+                                     ' Connectomics')
 
     # -- positional arguments
     parser.add_argument('function', action='store')
