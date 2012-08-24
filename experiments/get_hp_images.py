@@ -31,7 +31,6 @@ import skimage.io as io
 from coxlabdata import ConnectomicsHP
 from skimage.util.shape import view_as_blocks
 from skimage.util.shape import view_as_windows
-from sklearn import cross_validation
 
 DTYPE=np.float32
 NORMALIZE=True
