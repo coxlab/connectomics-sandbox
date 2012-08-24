@@ -58,6 +58,18 @@ a safe copy onto the machine on which you will perform the calculations. This is
 useful in particular if you need a working version of ``Fiji`` onto a cluster that generally
 does not have a graphical interface.
 
+Specific to Hans Pfister dataset
+--------------------------------
+
+If you want to perform some experiments on Hans Pfister dataset instead of ISBI, you should
+add the following dependency on top of the dependencies defined in *Installation Steps* ::
+
+    git clone git@github.com:coxlab/coxlabdata.git
+    cd coxlabdata && python setup.py develop
+
+This will allow you to use ``get_hp_images`` and use Hans Pfister's data in the driver.
+
+
 Installation Steps
 ==================
 
