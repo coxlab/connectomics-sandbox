@@ -1,0 +1,67 @@
+- ask nico about warping error with perfect annotations, shifted by one (translated)
+(smoke tests)
+
+- some more results:
+n=11, rf=21, nf=541, pe=0.36
+n=11, rf=21, nf=982, pe=0.38
+n=0, rf=21, nf=0, pe=0.23
+n=11, rf=21, nf=0, pe=0.30
+
+- imprinting:
+pe=0.36 (no change, or -)
+
+- post-dot no zm-uv:
+pe=0.13
+
+- pre-dot no zm-uv:
+pe=0.35
+
+- zm-uv filters (feat-wise):
+pe=0.36
+
+- zm-uv filters (point-wise):
+pe=0.34
+
+- imprint with 982 filters:
+pe=0.378
+
+- randn with 1864 filters:
+pe=0.40
+- randn with 4000 filters:
+pe=
+
+- debug/debug randn with 1864 filters:
+pe=0.36
+- debug/debug randn with 4000 filters:
+pe=0.34
+- full/debug randn with 1864 filters:
+pe=0.39
+
+- randn with 512 filters:
+pe=0.352
+- randn with 2000 filters:
+pe=0.403
+- imprint with 2000 filters:
+pe=0.401
+
+- randn with 3000 filters:
+pe = 0.414199520159
+
+- randn with 1000 filters:
+pe = 0.381371358487
+- randn with 2x1000 filters (abs):
+pe = 0.394242652752
+
+- randn with 2000 filters (float32):
+pe = 0.405190148395
+- randn with 2000 filters (float16):
+pe = 0.403432091849
+- randn with 2x1500 filters (float16):
+pe = 0.402557846741
+- randn with 3000 filters (float32):
+pe = 0.413743644335, ap = 0.30651953086499001
+
+
+TODO:
+- (W, b) with _pearson_ loss instead of logreg
+- ASGD (batched) vs LogReg

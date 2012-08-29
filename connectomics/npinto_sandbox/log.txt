@@ -1,0 +1,11 @@
+2012-07-30
+# -- t_A = tanh w/ A/B constants
+FINAL TST_RD (orig): 0.176755514053
+FINAL TST_RD (orig): 0.200746176843
+
+2012-07-31
+# -- t_A w/ clip(0, inf)
+FINAL TST_RD (orig): 0.147222156508
+FINAL TST_RD (orig): 0.200533009202
+
+
