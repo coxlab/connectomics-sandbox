@@ -1,28 +1,39 @@
 #!/bin/bash
 
-#BSUB -J test
-#BSUB -o test.out
-#BSUB -e test.err
+#BSUB -J best_777
+#BSUB -o best_777.out
+#BSUB -e best_777.err
 #BSUB -W 23:00
 #BSUB -q normal_serial
 #BSUB -n 8
-#BSUB -R "rusage[mem=12000]"
+#BSUB -R "rusage[mem=24000]"
 #BSUB -R "span[ptile=8]"
 
-
+# -- making sure that useful aliases are accessible to the command line
 source ~/.bashrc
 
+# -- entering the Gentoo Prefix environment
 ~/gentoo/startprefix
 
+# -- using "virtualenvwrapper" to enter my "connectomics box" Python virtual environment
 workon connectomics
 
+# -- this will be the scratch directory on the computing node to store intermediate Theano-generated code
 SCRATCH_DIR="/scratch/poilvert/theano_cache"
 mkdir -p $SCRATCH_DIR
 
+# -- the working directory where my codes are
 WORKING_DIR="/n/home07/poilvert/.virtualenvs/connectomics/connectomics-sandbox/experiments"
-
 cd $WORKING_DIR
 
+# -- the number of OpenMP threads to use (should equal the "-n" BSUB parameter above)
 export OMP_NUM_THREADS=8
 
+# -- path to the ISBI dataset on the machine
+export ISBI_PATH=/n/home07/poilvert/.virtualenvs/connectomics/dataset
+
+# -- path to the Fiji Linux executable (to be able to compute the pixel, rand and warp metrics)
+export FIJI_EXE_PATH=/n/home07/poilvert/.virtualenvs/connectomics/Fiji/fiji-linux64
+
+# -- actual code to run !
 THEANO_FLAGS='base_compiledir=/scratch/poilvert/theano_cache' python driver.py models.process --save --no_mongo_store

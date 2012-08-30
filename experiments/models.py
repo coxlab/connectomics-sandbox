@@ -20,7 +20,7 @@ from sthor.operation.resample import resample
 
 # -- if one wants to read the cascade description from a Pickle file, enter the
 # name of the Pickle file here
-CASCADE_PKL = '<my_cascade.pkl>'
+CASCADE_PKL = 'inputs/top_7_7_7_px_bypass_mf_19_19_balanced.pkl'
 
 # -- if we decide to use the warping of the annotations instead of the
 # annotations themselves, then set the warping threshold here (see Fiji
@@ -331,8 +331,11 @@ def process(tasks, *args):
 
     # -- getting the cascade complete information (from a pkl file or a custom
     # dictionnary). Modify the lines accordingly
-    #info_dict = cPickle.load(open(CASCADE_PKL, 'r'))
-    info_dict = custom_cascade
+    info_dict = cPickle.load(open(CASCADE_PKL, 'r'))
+    #info_dict = custom_cascade
+    info_dict['cascade_desc'][0]['balance_ratio'] = 0.55
+    info_dict['cascade_desc'][1]['balance_ratio'] = 0.30
+    info_dict['cascade_desc'][2]['balance_ratio'] = None
 
     n_cascades, n_stacks, stacks_desc_l, fuser_desc, weights, biases = \
             parse_cascade(info_dict)
@@ -532,7 +535,7 @@ def process(tasks, *args):
 
             f_map = np.dstack(pred_to_concatenate)
             rf_map = view_as_windows(f_map, rv_shape + (f_map.shape[-1],))
-            rf_map = rf_map.reshape(-1, fuser_n_features)
+            rf_map = np.ascontiguousarray(rf_map.reshape(-1, fuser_n_features))
 
             fuser.partial_fit(rf_map, (gt_img > 0.).ravel(),
                     w_start=np.zeros(rf_map.shape[1], dtype=np.float32),
@@ -570,7 +573,7 @@ def process(tasks, *args):
 
             f_map = np.dstack(pred_to_concatenate)
             rf_map = view_as_windows(f_map, rv_shape + (f_map.shape[-1],))
-            rf_map = rf_map.reshape(-1, fuser_n_features)
+            rf_map = np.ascontiguousarray(rf_map.reshape(-1, fuser_n_features))
 
             prediction = fuser.transform(rf_map).reshape(img_shape)
 
