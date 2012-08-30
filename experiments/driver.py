@@ -22,20 +22,43 @@ import argparse
 from pymongo import Connection
 
 # -- Default parameters
+# default name for the Pickle file that will store the data
 DEFAULT_PKL_FNAME = 'saved_data.pkl'
-DEFAULT_TRN_IDX = [0, 1, 2]
-DEFAULT_TST_IDX = [29]
+
+# training images to use (should be a list of integers)
+DEFAULT_TRN_IDX = range(30)
+
+# testing images to use (should be a list of integers)
+DEFAULT_TST_IDX = range(30)
+
+# whether the driver should save data by default ?
 DEFAULT_SAVE = False
+
+# whether to add the training images rotated by 90, 180 and 270 degres to the
+# training set ?
 DEFAULT_ROTATE = False
-DEFAULT_USE_TRUE_TST_IMG = False
+
+# if "True", the actual "official" testing images are used instead of validation
+# images from the training set (this works only for the ISBI dataset)
+DEFAULT_USE_TRUE_TST_IMG = True
 
 # -- Set your MongoDB-related parameters here
+# should the driver store in a MongoDB database by default ?
 DEFAULT_MONGO_STORE = True
+
+# what port to use to connect to the MongoDB database ?
 DEFAULT_MONGO_PORT = 28000
+
+# what is the IP address of the server holding the MongoDB database ?
 DEFAULT_MONGO_HOST = "<my_host_IP_address>"
+
+# what is the default MongoDB database name ?
 DEFAULT_MONGO_DB = '<my_mongo_database>'
+
+# to which database collection should we push the data to ?
 DEFAULT_MONGO_COLL = '<my_collection_name>'
 
+# used for caching the training/testing images
 CACHE = {}
 
 
@@ -105,13 +128,13 @@ def main():
         else:
             tasks = CACHE[key]
 
-    # -- call processing function
+    # -- call user's processing function
     start = time.time()
     function = import_function(args.function)
     output_true, output_pred, to_save = function(tasks, *args.function_arguments)
     stop = time.time()
 
-    # -- compute metrics from Ground Truth and Predicted maps
+    # -- compute metrics from Ground Truth and Predictions
     assert output_pred.ndim == 4
     n_images = output_pred.shape[0]
     n_cv_folds = output_pred.shape[-1]
@@ -151,11 +174,11 @@ def main():
         wps = np.array(wps)
 
         # -- reporting metrics mean values
-        print 'mean Average Precision: %6.3f' % aps.mean()
-        print 'mean Pearson coef.    : %6.3f' % pearsons.mean()
-        print 'mean Pixel Error      : %6.3f' % pxs.mean()
-        print 'mean Rand Error       : %6.3f' % rds.mean()
-        print 'mean Warping Error    : %6.3f' % wps.mean()
+        print 'mean Average Precision: %6.4f' % aps.mean()
+        print 'mean Pearson coef.    : %6.4f' % pearsons.mean()
+        print 'mean Pixel Error      : %6.4f' % pxs.mean()
+        print 'mean Rand Error       : %6.4f' % rds.mean()
+        print 'mean Warping Error    : %6.4f' % wps.mean()
 
     print 'time to compute (s)   : %6.3f' % (stop - start)
 

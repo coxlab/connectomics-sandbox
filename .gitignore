@@ -6,3 +6,5 @@
 *.swp
 iterate*
 *.sh
+inputs
+outputs
